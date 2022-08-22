@@ -15,6 +15,7 @@ import android.view.inputmethod.EditorInfo
 import android.webkit.MimeTypeMap
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.addCallback
 import androidx.activity.result.contract.ActivityResultContracts
@@ -223,6 +224,11 @@ class MainFragment : Fragment() {
                             isVisible = shouldShowProgress
                         }
                     }
+
+                    // Set notifications toggle icon
+                    menu.findItem(R.id.menu_toggle_notifications).setIcon(
+                        if (dankChatPreferences.isNotificationsEnabled) R.drawable.ic_notifications else R.drawable.ic_notifications_off
+                    )
                 }
             }
 
@@ -237,6 +243,7 @@ class MainFragment : Fragment() {
                     R.id.menu_login          -> openLogin()
                     R.id.menu_relogin        -> openLogin(isRelogin = true)
                     R.id.menu_logout         -> showLogoutConfirmationDialog()
+                    R.id.menu_toggle_notifications -> toggleNotifications()
                     R.id.menu_add            -> navigateSafe(R.id.action_mainFragment_to_addChannelDialogFragment)
                     R.id.menu_mentions       -> mentionBottomSheetBehavior?.expand()
                     R.id.menu_open_channel   -> openChannel()
@@ -802,6 +809,17 @@ class MainFragment : Fragment() {
         }
         .setNegativeButton(getString(R.string.dialog_cancel)) { dialog, _ -> dialog.dismiss() }
         .create().show()
+
+    private fun toggleNotifications() {
+        dankChatPreferences.toggleNotifications()
+
+        activity?.invalidateOptionsMenu() // force menu reload to show correct icon
+
+        if (dankChatPreferences.isNotificationsEnabled)
+            Toast.makeText(context, "Notifications enabled", Toast.LENGTH_SHORT).show()
+        else
+            Toast.makeText(context, "Notifications disabled", Toast.LENGTH_SHORT).show()
+    }
 
     private fun openChannel() {
         val channel = mainViewModel.getActiveChannel() ?: return
