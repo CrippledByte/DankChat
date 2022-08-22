@@ -137,6 +137,8 @@ class MainFragment : Fragment() {
         }
     }
 
+    private var notificationToggleToast: Toast? = null
+
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         tabAdapter = ChatTabAdapter(this)
@@ -815,10 +817,16 @@ class MainFragment : Fragment() {
 
         activity?.invalidateOptionsMenu() // force menu reload to show correct icon
 
+        // Cancel previous toast if still visible
+        notificationToggleToast?.cancel()
+
+        var status = "disabled"
         if (dankChatPreferences.isNotificationsEnabled)
-            Toast.makeText(context, "Notifications enabled", Toast.LENGTH_SHORT).show()
-        else
-            Toast.makeText(context, "Notifications disabled", Toast.LENGTH_SHORT).show()
+            status = "enabled"
+
+        // Show new toast
+        notificationToggleToast = Toast.makeText(context, "Notifications $status", Toast.LENGTH_SHORT)
+        notificationToggleToast?.show()
     }
 
     private fun openChannel() {
