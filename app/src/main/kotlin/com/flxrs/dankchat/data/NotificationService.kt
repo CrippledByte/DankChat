@@ -50,6 +50,8 @@ class NotificationService : Service(), CoroutineScope {
         }
     }
 
+    private val vibrationPatternMention = longArrayOf(0, 250)
+
     private var notificationsEnabled = false
     private var ttsEnabled = false
     private var combinedTTSFormat = false
@@ -106,7 +108,11 @@ class NotificationService : Service(), CoroutineScope {
                 setShowBadge(false)
             }
 
-            val mentionChannel = NotificationChannel(CHANNEL_ID_DEFAULT, "Mentions", NotificationManager.IMPORTANCE_DEFAULT)
+            val mentionChannel = NotificationChannel(CHANNEL_ID_DEFAULT, "Mentions", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                vibrationPattern = vibrationPatternMention
+                enableVibration(true)
+            }
+
             manager.createNotificationChannel(mentionChannel)
             manager.createNotificationChannel(channel)
         }
@@ -310,6 +316,7 @@ class NotificationService : Service(), CoroutineScope {
             .setContentIntent(pendingStartActivityIntent)
             .setSmallIcon(R.drawable.ic_notification_icon)
             .setGroup(MENTION_GROUP)
+            .setVibrate(vibrationPatternMention)
             .build()
 
         val id = notificationId
