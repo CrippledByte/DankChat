@@ -152,4 +152,8 @@ dependencies {
     //dankImplementation "com.github.chuckerteam.chucker:library:$chucker_version"
     //debugImplementation "com.github.chuckerteam.chucker:library-no-op:$chucker_version"
     //releaseImplementation "com.github.chuckerteam.chucker:library-no-op:$chucker_version"
+
+// JSON parser
+    implementation 'com.squareup.moshi:moshi:1.13.0'
+    kapt 'com.squareup.moshi:moshi-kotlin-codegen:1.13.0'
 }
