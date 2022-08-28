@@ -141,12 +141,18 @@ class UserPopupViewModel @Inject constructor(
             val user = dataRepository.getUser(targetUserId)
             val currentUserFollows = dataRepository.getUserFollows(currentUserId, targetUserId)
             val isBlocked = ignoresRepository.isUserBlocked(targetUserId)
+            val isSubscribed = chatRepository.isSubscribed(targetUserId)
+            val subscriptionMonths = chatRepository.subscriptionMonths(targetUserId)
+            val subscriptionTier = chatRepository.subscriptionTier(targetUserId)
 
             mapToState(
                 user = user,
                 channelUserFollows = channelUserFollows,
                 currentUserFollows = currentUserFollows,
-                isBlocked = isBlocked
+                isBlocked = isBlocked,
+                isSubscribed = isSubscribed,
+                subscriptionMonths = subscriptionMonths,
+                subscriptionTier = subscriptionTier,
             )
         }
 
@@ -154,7 +160,7 @@ class UserPopupViewModel @Inject constructor(
         _userPopupState.value = state
     }
 
-    private fun mapToState(user: UserDto?, channelUserFollows: UserFollowsDto?, currentUserFollows: UserFollowsDto?, isBlocked: Boolean): UserPopupState {
+    private fun mapToState(user: UserDto?, channelUserFollows: UserFollowsDto?, currentUserFollows: UserFollowsDto?, isBlocked: Boolean, isSubscribed: Boolean, subscriptionMonths: Int, subscriptionTier: Int?): UserPopupState {
         user ?: return UserPopupState.Error()
 
         return UserPopupState.Success(
@@ -165,7 +171,10 @@ class UserPopupViewModel @Inject constructor(
             created = user.createdAt.asParsedZonedDateTime(),
             isFollowing = currentUserFollows?.total == 1,
             followingSince = channelUserFollows?.data?.firstOrNull()?.followedAt?.asParsedZonedDateTime(),
-            isBlocked = isBlocked
+            isBlocked = isBlocked,
+            isSubscribed = isSubscribed,
+            subscriptionMonths = subscriptionMonths,
+            subscriptionTier = subscriptionTier,
         )
     }
 

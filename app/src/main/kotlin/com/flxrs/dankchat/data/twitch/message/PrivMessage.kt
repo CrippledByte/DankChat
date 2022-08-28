@@ -31,6 +31,9 @@ data class PrivMessage(
     val timedOut: Boolean = false,
     val tags: Map<String, String>,
     val userDisplay: UserDisplay? = null,
+    val isSubscribed: Boolean = false,
+    val subscriptionMonths: Int = 0,
+    val subscriptionTier: Int? = null,
 ) : Message() {
 
     override val emoteData: EmoteData = EmoteData(originalMessage, channel, emoteTag = tags["emotes"].orEmpty())
@@ -59,6 +62,35 @@ data class PrivMessage(
             }
             val channel = params[0].substring(1)
 
+            // Get subscription status
+            var isSubscribed = false
+            var subscriptionMonths = 0
+            var subscriptionTier: Int? = null
+
+            tags["badges"]?.let {
+                for (tag in it.split(',')) {
+                    if (tag.startsWith( "subscriber/")) {
+                        isSubscribed = true
+
+                        // Tier 2 and tier 3 have a '20' and '30' prefix.
+                        // For example: Tier 3, 2 years badge code is 3024.
+                        subscriptionTier = 1
+                        val value = tag.split('/')[1]
+                        if ("20\\d{2}".toRegex().matches(value)) subscriptionTier = 2
+                        if ("30\\d{2}".toRegex().matches(value)) subscriptionTier = 3
+                    }
+                }
+            }
+
+            tags["badge-info"]?.let {
+                for (tag in it.split(',')) {
+                    if (tag.startsWith("subscriber/")) {
+                        val value = tag.split('/')[1]
+                        subscriptionMonths = value.toInt() ?: 0
+                    }
+                }
+            }
+
             return PrivMessage(
                 timestamp = ts,
                 channel = channel.toUserName(),
@@ -71,6 +103,9 @@ data class PrivMessage(
                 userId = tags["user-id"]?.toUserId(),
                 timedOut = tags["rm-deleted"] == "1",
                 tags = tags,
+                isSubscribed = isSubscribed,
+                subscriptionMonths = subscriptionMonths,
+                subscriptionTier = subscriptionTier
             )
         }
     }

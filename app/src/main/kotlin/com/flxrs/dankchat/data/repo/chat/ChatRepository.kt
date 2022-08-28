@@ -7,6 +7,7 @@ import com.flxrs.dankchat.chat.ChatImportance
 import com.flxrs.dankchat.chat.ChatItem
 import com.flxrs.dankchat.chat.toMentionTabItems
 import com.flxrs.dankchat.data.DisplayName
+import com.flxrs.dankchat.data.UserId
 import com.flxrs.dankchat.data.UserName
 import com.flxrs.dankchat.data.api.chatters.ChattersApiClient
 import com.flxrs.dankchat.data.api.recentmessages.RecentMessagesApiClient
@@ -261,6 +262,31 @@ class ChatRepository @Inject constructor(
                 listOf(message).addAndLimit(current, scrollBackLength, checkForDuplications = true)
             }
         }
+    }
+
+    private fun getLastMessageByUser(userId: UserId?): PrivMessage? {
+        if (userId == null) return null
+
+        for (chatitem in messages[activeChannel.value]?.value!!.reversed()) {
+            try { // throws error if SystemMessage
+                val message = chatitem.message as PrivMessage
+                if (userId.equals(message.userId)) return message
+            } catch (e: Exception) {}
+        }
+
+        return null
+    }
+
+    fun isSubscribed(userId: UserId?): Boolean {
+        return getLastMessageByUser(userId)?.isSubscribed ?: false
+    }
+
+    fun subscriptionMonths(userId: UserId?): Int {
+        return getLastMessageByUser(userId)?.subscriptionMonths ?: 0
+    }
+
+    fun subscriptionTier(userId: UserId?): Int? {
+        return getLastMessageByUser(userId)?.subscriptionTier
     }
 
     suspend fun loadChatters(channel: UserName) = withContext(Dispatchers.IO) {
