@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.edit
 import androidx.core.view.updateLayoutParams
@@ -71,6 +72,21 @@ class NotificationsSettingsFragment : MaterialPreferenceFragmentCompat() {
             multiEntryList.adapter = entryAdapter
             multiEntrySheet.updateLayoutParams {
                 height = windowHeight
+            }
+            multiEntryClear.setOnClickListener{
+                // Show dialog before removing all entries
+                val builder = AlertDialog.Builder(context)
+                builder.setMessage("Do you want to clear all mentions?")
+                    .setTitle("Clear mentions")
+                    .setPositiveButton("Clear"
+                    ) { _, _ ->
+                        entryAdapter.entries.clear() // remove all entries
+                        multiEntryList.adapter = entryAdapter // reload entries
+                        entryAdapter.entries.add(MultiEntryItem.AddEntry) // add 'Add an entry' button again
+                    }
+                    .setNegativeButton("Cancel") { _, _ -> }
+                    .create()
+                    .show()
             }
         }
 
