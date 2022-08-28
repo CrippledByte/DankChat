@@ -141,6 +141,15 @@ class UserPopupDialogFragment : BottomSheetDialogFragment() {
         userFollowage.text = userState.followingSince?.let {
             getString(R.string.user_popup_following_since, it)
         } ?: getString(R.string.user_popup_not_following)
+        if (userState.isSubscribed) {
+            userSubscription.text = "Tier ${userState.subscriptionTier}. Subscribed for ${userState.subscriptionMonths} months"
+        }
+        else if (userState.subscriptionMonths > 0) {
+            userSubscription.text = "Previously subscribed for ${userState.subscriptionMonths} months"
+        }
+        else {
+            userSubscription.visibility = View.GONE
+        }
         userBlock.text = when {
             userState.isBlocked -> getString(R.string.user_popup_unblock)
             else                -> getString(R.string.user_popup_block)

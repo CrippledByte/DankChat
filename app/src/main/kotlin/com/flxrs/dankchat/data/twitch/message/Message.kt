@@ -274,6 +274,9 @@ data class TwitchMessage(
     val isSystem: Boolean = false,
     val isMention: Boolean = false,
     val isReward: Boolean = false,
+    val isSubscribed: Boolean = false,
+    val subscriptionMonths: Int = 0,
+    val subscriptionTier: Int? = null,
 ) : Message() {
 
     fun checkForMention(username: String, mentions: List<Mention>): TwitchMessage {
@@ -317,6 +320,23 @@ data class TwitchMessage(
             val (appendedSpaceAdjustedMessage, appendedSpaces) = duplicateSpaceAdjustedMessage.appendSpacesBetweenEmojiGroup()
             val (overlayEmotesAdjustedMessage, emotes) = emoteManager.parseEmotes(appendedSpaceAdjustedMessage, channel, emoteTag, appendedSpaces, removedSpaces)
 
+            // Get subscription status
+            var isSubscribed = false
+            var subscriptionMonths = 0
+            var subscriptionTier: Int? = null
+            for (badge in badges) {
+                if (badge.badgeTag?.startsWith("subscriber/") == true) {
+                    isSubscribed = true
+                    subscriptionMonths = badge.badgeInfo?.toInt() ?: 0
+
+                    // Tier 2 and tier 3 have a '20' and '30' prefix.
+                    // For example: Tier 3, 2 years badge code is 3024.
+                    subscriptionTier = 1
+                    if ("20\\d{2}".toRegex().matches(badge.badgeTag!!)) subscriptionTier = 2
+                    if ("30\\d{2}".toRegex().matches(badge.badgeTag!!)) subscriptionTier = 3
+                }
+            }
+
             return TwitchMessage(
                 timestamp = ts,
                 channel = channel,
@@ -332,7 +352,10 @@ data class TwitchMessage(
                 id = id,
                 userId = tags["user-id"],
                 timedOut = tags["rm-deleted"] == "1",
-                isReward = tags["msg-id"] == "highlighted-message" || tags["custom-reward-id"] != null
+                isReward = tags["msg-id"] == "highlighted-message" || tags["custom-reward-id"] != null,
+                isSubscribed = isSubscribed,
+                subscriptionMonths = subscriptionMonths,
+                subscriptionTier = subscriptionTier
             )
         }
 

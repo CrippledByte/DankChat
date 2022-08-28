@@ -107,12 +107,18 @@ class UserPopupViewModel @Inject constructor(
             val channelUserFollows = channelId?.let { dataRepository.getUserFollows(args.targetUserId, channelId) }
             val user = dataRepository.getUser(args.targetUserId)
             val currentUserFollows = dataRepository.getUserFollows(currentUserId, args.targetUserId)
+            val isSubscribed = chatRepository.isSubscribed(user?.name!!)
+            val subscriptionMonths = chatRepository.subscriptionMonths(user.name)
+            val subscriptionTier = chatRepository.subscriptionTier(user.name)
             val isBlocked = chatRepository.isUserBlocked(args.targetUserId)
 
             mapToState(
                 user = user,
                 channelUserFollows = channelUserFollows,
                 currentUserFollows = currentUserFollows,
+                isSubscribed = isSubscribed,
+                subscriptionMonths = subscriptionMonths,
+                subscriptionTier = subscriptionTier,
                 isBlocked = isBlocked
             )
         }
@@ -121,7 +127,7 @@ class UserPopupViewModel @Inject constructor(
         _userPopupState.value = state
     }
 
-    private fun mapToState(user: HelixUserDto?, channelUserFollows: UserFollowsDto?, currentUserFollows: UserFollowsDto?, isBlocked: Boolean): UserPopupState {
+    private fun mapToState(user: HelixUserDto?, channelUserFollows: UserFollowsDto?, currentUserFollows: UserFollowsDto?, isSubscribed: Boolean, subscriptionMonths: Int, subscriptionTier: Int?, isBlocked: Boolean): UserPopupState {
         user ?: return UserPopupState.Error()
 
         return UserPopupState.Success(
@@ -132,6 +138,9 @@ class UserPopupViewModel @Inject constructor(
             created = user.createdAt.asParsedZonedDateTime(),
             isFollowing = currentUserFollows?.total == 1,
             followingSince = channelUserFollows?.data?.firstOrNull()?.followedAt?.asParsedZonedDateTime(),
+            isSubscribed = isSubscribed,
+            subscriptionMonths = subscriptionMonths,
+            subscriptionTier = subscriptionTier,
             isBlocked = isBlocked
         )
     }
