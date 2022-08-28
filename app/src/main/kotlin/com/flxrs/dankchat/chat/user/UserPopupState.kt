@@ -15,9 +15,6 @@ sealed class UserPopupState {
         val avatarUrl: String,
         val isFollowing: Boolean = false,
         val followingSince: String? = null,
-        val isSubscribed: Boolean,
-        val subscriptionMonths: Int,
-        val subscriptionTier: Int? = null,
         val isBlocked: Boolean = false
     ) : UserPopupState()
 
