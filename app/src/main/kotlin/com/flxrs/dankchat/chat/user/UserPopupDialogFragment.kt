@@ -141,15 +141,35 @@ class UserPopupDialogFragment : BottomSheetDialogFragment() {
         userFollowage.text = userState.followingSince?.let {
             getString(R.string.user_popup_following_since, it)
         } ?: getString(R.string.user_popup_not_following)
-        if (userState.isSubscribed) {
-            userSubscription.text = "Tier ${userState.subscriptionTier}. Subscribed for ${userState.subscriptionMonths} months"
+
+        // Get subscription status
+        var isSubscribed = false
+        var subscriptionMonths = 0
+        var subscriptionTier = 1
+        for (badge in args.badges) {
+            if (badge.badgeTag?.startsWith("subscriber/") == true) {
+                isSubscribed = true
+                subscriptionMonths = badge.badgeInfo?.toInt() ?: 0
+
+                // Tier 2 and tier 3 have a '20' and '30' prefix.
+                // For example: Tier 3, 2 years badge code is 3024.
+                if ("subscriber\\/20\\d{2}".toRegex().matches(badge.badgeTag!!)) subscriptionTier = 2
+                if ("subscriber\\/30\\d{2}".toRegex().matches(badge.badgeTag!!)) subscriptionTier = 3
+            }
         }
-        else if (userState.subscriptionMonths > 0) {
-            userSubscription.text = "Previously subscribed for ${userState.subscriptionMonths} months"
+        var subscriptionText = "";
+        if (isSubscribed) {
+            subscriptionText += "Tier ${subscriptionTier}. Subscribed for $subscriptionMonths month"
+        }
+        else if (subscriptionMonths > 0) {
+            subscriptionText += "Previously subscribed for $subscriptionMonths month"
         }
         else {
             userSubscription.visibility = View.GONE
         }
+        if (subscriptionMonths >= 2) subscriptionText += "s"
+        userSubscription.text = subscriptionText
+
         userBlock.text = when {
             userState.isBlocked -> getString(R.string.user_popup_unblock)
             else                -> getString(R.string.user_popup_block)

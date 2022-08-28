@@ -21,7 +21,6 @@ import io.ktor.http.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.serialization.json.Json
-import java.lang.Exception
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import kotlin.collections.set
@@ -201,29 +200,6 @@ class ChatRepository @Inject constructor(
             blockList.clear()
             blockList.addAll(data.map { it.id })
         }
-    }
-
-    private fun getLastMessageByUser(name: String): TwitchMessage? {
-        for (chatitem in messages[activeChannel.value]?.value!!.reversed()) {
-            try { // throws error if SystemMessage
-                val message = chatitem.message as TwitchMessage
-                if (name == message.name) return message
-            } catch (e: Exception) {}
-        }
-
-        return null
-    }
-
-    fun isSubscribed(name: String): Boolean {
-        return getLastMessageByUser(name)?.isSubscribed ?: false
-    }
-
-    fun subscriptionMonths(name: String): Int {
-        return getLastMessageByUser(name)?.subscriptionMonths ?: 0
-    }
-
-    fun subscriptionTier(name: String): Int? {
-        return getLastMessageByUser(name)?.subscriptionTier
     }
 
     fun isUserBlocked(targetUserId: String): Boolean = targetUserId in blockList
