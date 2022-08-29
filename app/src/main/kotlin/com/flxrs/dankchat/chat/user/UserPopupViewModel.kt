@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.flxrs.dankchat.data.ChatRepository
 import com.flxrs.dankchat.data.DataRepository
 import com.flxrs.dankchat.data.api.dto.HelixUserDto
+import com.flxrs.dankchat.data.api.dto.IvrSubageDtos
 import com.flxrs.dankchat.data.api.dto.UserFollowsDto
 import com.flxrs.dankchat.preferences.DankChatPreferenceStore
 import com.flxrs.dankchat.utils.DateTimeUtils.asParsedZonedDateTime
@@ -109,11 +110,14 @@ class UserPopupViewModel @Inject constructor(
             val currentUserFollows = dataRepository.getUserFollows(currentUserId, args.targetUserId)
             val isBlocked = chatRepository.isUserBlocked(args.targetUserId)
 
+            val subage = args.channel?.let { dataRepository.getSubage(it, args.targetUserName) }
+
             mapToState(
                 user = user,
                 channelUserFollows = channelUserFollows,
                 currentUserFollows = currentUserFollows,
-                isBlocked = isBlocked
+                isBlocked = isBlocked,
+                subage = subage
             )
         }
 
@@ -121,7 +125,7 @@ class UserPopupViewModel @Inject constructor(
         _userPopupState.value = state
     }
 
-    private fun mapToState(user: HelixUserDto?, channelUserFollows: UserFollowsDto?, currentUserFollows: UserFollowsDto?, isBlocked: Boolean): UserPopupState {
+    private fun mapToState(user: HelixUserDto?, channelUserFollows: UserFollowsDto?, currentUserFollows: UserFollowsDto?, isBlocked: Boolean, subage: IvrSubageDtos?): UserPopupState {
         user ?: return UserPopupState.Error()
 
         return UserPopupState.Success(
@@ -132,7 +136,11 @@ class UserPopupViewModel @Inject constructor(
             created = user.createdAt.asParsedZonedDateTime(),
             isFollowing = currentUserFollows?.total == 1,
             followingSince = channelUserFollows?.data?.firstOrNull()?.followedAt?.asParsedZonedDateTime(),
-            isBlocked = isBlocked
+            isBlocked = isBlocked,
+            isSubscriptionHidden = subage?.hidden == true,
+            isSubscribed = subage?.subscribed == true,
+            subscriptionTier = subage?.meta?.tier ?: "?",
+            subscribedMonths = subage?.cumulative?.months ?: 0
         )
     }
 

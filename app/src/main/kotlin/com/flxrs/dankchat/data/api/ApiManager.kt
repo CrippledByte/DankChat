@@ -31,6 +31,7 @@ class ApiManager @Inject constructor(
     private val badgesApiService: BadgesApiService,
     private val tmiApiService: TmiApiService,
     private val sevenTVApiService: SevenTVApiService,
+    private val ivrApiService: IvrApiService,
     private val dankChatPreferenceStore: DankChatPreferenceStore
 ) {
 
@@ -110,6 +111,8 @@ class ApiManager @Inject constructor(
 
     suspend fun getChatters(channel: String): ChattersDto? = tmiApiService.getChatters(channel).bodyOrNull<ChattersResultDto>()?.chatters
     suspend fun getChatterCount(channel: String): Int? = tmiApiService.getChatters(channel).bodyOrNull<ChatterCountDto>()?.chatterCount
+
+    suspend fun getSubage(channel: String, user: String): IvrSubageDtos? = ivrApiService.getSubage(channel, user).bodyOrNull()
 
     suspend fun uploadMedia(file: File): Result<UploadDto> = withContext(Dispatchers.IO) {
         val uploader = dankChatPreferenceStore.customImageUploader

@@ -34,6 +34,7 @@ object NetworkModule {
     private const val FFZ_BASE_URL = "https://api.frankerfacez.com/v1/"
     private const val BTTV_BASE_URL = "https://api.betterttv.net/3/cached/"
     private const val SEVENTV_BASE_URL = "https://api.7tv.app/v2/"
+    private const val IVR_BASE_URL = "https://api.ivr.fi/"
 
     @WebSocketOkHttpClient
     @Singleton
@@ -160,6 +161,14 @@ object NetworkModule {
 
     @Singleton
     @Provides
+    fun provideIvrApiService(ktorClient: HttpClient) = IvrApiService(ktorClient.config {
+        defaultRequest {
+            url(IVR_BASE_URL)
+        }
+    })
+
+    @Singleton
+    @Provides
     fun provideApiManager(
         ktorClient: HttpClient,
         bttvApiService: BTTVApiService,
@@ -172,6 +181,7 @@ object NetworkModule {
         badgesApiService: BadgesApiService,
         tmiApiService: TmiApiService,
         sevenTVApiService: SevenTVApiService,
+        ivrApiService: IvrApiService,
         dankChatPreferenceStore: DankChatPreferenceStore
     ): ApiManager = ApiManager(
         ktorClient,
@@ -185,6 +195,7 @@ object NetworkModule {
         badgesApiService,
         tmiApiService,
         sevenTVApiService,
+        ivrApiService,
         dankChatPreferenceStore
     )
 

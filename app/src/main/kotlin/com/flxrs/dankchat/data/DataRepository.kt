@@ -3,6 +3,7 @@ package com.flxrs.dankchat.data
 import android.util.Log
 import com.flxrs.dankchat.data.api.ApiManager
 import com.flxrs.dankchat.data.api.dto.HelixUserDto
+import com.flxrs.dankchat.data.api.dto.IvrSubageDtos
 import com.flxrs.dankchat.data.api.dto.UserFollowsDto
 import com.flxrs.dankchat.data.twitch.badge.toBadgeSets
 import com.flxrs.dankchat.data.twitch.emote.EmoteManager
@@ -59,6 +60,8 @@ class DataRepository @Inject constructor(
     suspend fun getUserFollows(fromId: String, toId: String): UserFollowsDto? = apiManager.getUsersFollows(fromId, toId)
     suspend fun blockUser(targetUserId: String): Boolean = apiManager.blockUser(targetUserId)
     suspend fun unblockUser(targetUserId: String): Boolean = apiManager.unblockUser(targetUserId)
+
+    suspend fun getSubage(channel: String, user: String): IvrSubageDtos? = apiManager.getSubage(channel, user)
 
     suspend fun uploadMedia(file: File): Result<String> {
         val uploadResult = apiManager.uploadMedia(file)
