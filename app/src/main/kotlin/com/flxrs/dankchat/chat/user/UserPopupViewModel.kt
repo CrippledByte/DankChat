@@ -9,6 +9,7 @@ import com.flxrs.dankchat.data.UserId
 import com.flxrs.dankchat.data.UserName
 import com.flxrs.dankchat.data.api.helix.dto.UserDto
 import com.flxrs.dankchat.data.api.helix.dto.UserFollowsDto
+import com.flxrs.dankchat.data.api.ivr.dto.IvrSubageDto
 import com.flxrs.dankchat.data.repo.command.CommandRepository
 import com.flxrs.dankchat.data.repo.command.CommandResult
 import com.flxrs.dankchat.data.repo.IgnoresRepository
@@ -134,7 +135,6 @@ class UserPopupViewModel @Inject constructor(
             return@launch
         }
 
-
         val targetUserId = args.targetUserId
         val result = runCatching {
             val channelId = args.channel?.let { dataRepository.getUserIdByName(it) }
@@ -143,11 +143,14 @@ class UserPopupViewModel @Inject constructor(
             val currentUserFollows = dataRepository.getUserFollows(currentUserId, targetUserId)
             val isBlocked = ignoresRepository.isUserBlocked(targetUserId)
 
+            val subage = args.channel?.let { dataRepository.getSubage(it, args.targetUserName) }
+
             mapToState(
                 user = user,
                 channelUserFollows = channelUserFollows,
                 currentUserFollows = currentUserFollows,
-                isBlocked = isBlocked
+                isBlocked = isBlocked,
+                subage = subage
             )
         }
 
@@ -155,7 +158,7 @@ class UserPopupViewModel @Inject constructor(
         _userPopupState.value = state
     }
 
-    private fun mapToState(user: UserDto?, channelUserFollows: UserFollowsDto?, currentUserFollows: UserFollowsDto?, isBlocked: Boolean): UserPopupState {
+    private fun mapToState(user: UserDto?, channelUserFollows: UserFollowsDto?, currentUserFollows: UserFollowsDto?, isBlocked: Boolean, subage: Result<IvrSubageDto?>?): UserPopupState {
         user ?: return UserPopupState.Error()
 
         return UserPopupState.Success(
@@ -166,7 +169,11 @@ class UserPopupViewModel @Inject constructor(
             created = user.createdAt.asParsedZonedDateTime(),
             isFollowing = currentUserFollows?.total == 1,
             followingSince = channelUserFollows?.data?.firstOrNull()?.followedAt?.asParsedZonedDateTime(),
-            isBlocked = isBlocked
+            isBlocked = isBlocked,
+            isSubscriptionHidden = subage?.getOrNull()?.let { it.hidden } == true,
+            isSubscribed = subage?.getOrNull()?.let { it.subscribed } == true,
+            subscriptionTier = subage?.getOrNull()?.let { it.meta?.tier } ?: "?",
+            subscribedMonths = subage?.getOrNull()?.let { it.cumulative?.months } ?: 0
         )
     }
 

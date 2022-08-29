@@ -15,7 +15,11 @@ sealed class UserPopupState {
         val avatarUrl: String,
         val isFollowing: Boolean = false,
         val followingSince: String? = null,
-        val isBlocked: Boolean = false
+        val isBlocked: Boolean = false,
+        val isSubscriptionHidden: Boolean,
+        val isSubscribed: Boolean,
+        val subscriptionTier: String,
+        val subscribedMonths: Int
     ) : UserPopupState()
 
     data class NotLoggedIn(val userName: UserName, val displayName: DisplayName) : UserPopupState()

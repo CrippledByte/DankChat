@@ -11,6 +11,8 @@ import com.flxrs.dankchat.data.api.helix.HelixApiClient
 import com.flxrs.dankchat.data.api.helix.dto.StreamDto
 import com.flxrs.dankchat.data.api.helix.dto.UserDto
 import com.flxrs.dankchat.data.api.helix.dto.UserFollowsDto
+import com.flxrs.dankchat.data.api.ivr.IvrApiClient
+import com.flxrs.dankchat.data.api.ivr.dto.IvrSubageDto
 import com.flxrs.dankchat.data.api.seventv.SevenTVApiClient
 import com.flxrs.dankchat.data.api.upload.UploadClient
 import com.flxrs.dankchat.data.repo.RecentUploadsRepository
@@ -42,6 +44,7 @@ class DataRepository @Inject constructor(
     private val bttvApiClient: BTTVApiClient,
     private val sevenTVApiClient: SevenTVApiClient,
     private val uploadClient: UploadClient,
+    private val ivrApiClient: IvrApiClient,
     private val emoteRepository: EmoteRepository,
     private val recentUploadsRepository: RecentUploadsRepository,
     private val dankChatPreferenceStore: DankChatPreferenceStore,
@@ -63,6 +66,8 @@ class DataRepository @Inject constructor(
     suspend fun getUsersByNames(names: List<UserName>): List<UserDto> = helixApiClient.getUsersByNames(names).getOrNull().orEmpty()
     suspend fun getUserFollows(fromId: UserId, toId: UserId): UserFollowsDto? = helixApiClient.getUsersFollows(fromId, toId).getOrNull()
     suspend fun getStreams(channels: List<UserName>): List<StreamDto>? = helixApiClient.getStreams(channels).getOrNull()
+
+    suspend fun getSubage(channel: UserName, user: UserName): Result<IvrSubageDto?> = ivrApiClient.getSubage(channel, user)
 
     suspend fun uploadMedia(file: File): Result<String> = uploadClient.uploadMedia(file).mapCatching {
         recentUploadsRepository.addUpload(it)
