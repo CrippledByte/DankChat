@@ -271,16 +271,18 @@ class NotificationService : Service(), CoroutineScope {
     private data class NotificationData(
         val channel: String,
         val name: String,
+        val displayName: String,
         val message: String,
         val isWhisper: Boolean = false,
         val isNotify: Boolean = false,
     ) {
         companion object {
             fun Message.toNotificationData(): NotificationData? = when (this) {
-                is TwitchMessage  -> if (isMention) NotificationData(channel, name, originalMessage, isNotify = isNotify) else null
+                is TwitchMessage  -> if (isMention) NotificationData(channel, name, displayName, originalMessage, isNotify = isNotify) else null
                 is WhisperMessage -> NotificationData(
                     channel = "",
                     name = name,
+                    displayName = displayName,
                     message = originalMessage,
                     isWhisper = true,
                 )
@@ -305,9 +307,9 @@ class NotificationService : Service(), CoroutineScope {
             .build()
 
         val title = when {
-            isWhisper -> getString(R.string.notification_whisper_mention, name)
+            isWhisper -> getString(R.string.notification_whisper_mention, displayName)
             isNotify  -> getString(R.string.notification_notify_mention, channel)
-            else      -> getString(R.string.notification_mention, name, channel)
+            else      -> getString(R.string.notification_mention, displayName, channel)
         }
 
         val notification = NotificationCompat.Builder(this@NotificationService, CHANNEL_ID_DEFAULT)
