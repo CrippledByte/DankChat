@@ -24,6 +24,7 @@ import com.flxrs.dankchat.data.twitch.message.Message
 import com.flxrs.dankchat.data.twitch.message.TwitchMessage
 import com.flxrs.dankchat.data.twitch.message.WhisperMessage
 import com.flxrs.dankchat.main.MainActivity
+import com.flxrs.dankchat.preferences.DankChatPreferenceStore
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
 import java.util.*
@@ -67,6 +68,9 @@ class NotificationService : Service(), CoroutineScope {
 
     @Inject
     lateinit var dataRepository: DataRepository
+
+    @Inject
+    lateinit var dankChatPreferenceStore: DankChatPreferenceStore
 
     private var tts: TextToSpeech? = null
     private var audioManager: AudioManager? = null
@@ -275,10 +279,11 @@ class NotificationService : Service(), CoroutineScope {
         val message: String,
         val isWhisper: Boolean = false,
         val isNotify: Boolean = false,
+        val isMention: Boolean = false,
     ) {
         companion object {
             fun Message.toNotificationData(): NotificationData? = when (this) {
-                is TwitchMessage  -> if (isMention) NotificationData(channel, name, displayName, originalMessage, isNotify = isNotify) else null
+                is TwitchMessage  -> if (isMention) NotificationData(channel, name, displayName, originalMessage, isNotify = isNotify, isMention = isMention) else null
                 is WhisperMessage -> NotificationData(
                     channel = "",
                     name = name,
@@ -291,7 +296,7 @@ class NotificationService : Service(), CoroutineScope {
         }
     }
 
-    private fun NotificationData.createMentionNotification() {
+    private suspend fun NotificationData.createMentionNotification() {
         val pendingStartActivityIntent = Intent(this@NotificationService, MainActivity::class.java).let {
             it.putExtra(MainActivity.OPEN_CHANNEL_KEY, channel)
             PendingIntent.getActivity(this@NotificationService, notificationIntentCode, it, pendingIntentFlag)
@@ -306,10 +311,14 @@ class NotificationService : Service(), CoroutineScope {
             .setAutoCancel(true)
             .build()
 
+        val user = dataRepository.getUser(dankChatPreferenceStore.userIdString!!)
+        val isUserMention = message.contains(user!!.name, ignoreCase = true) || message.contains(user.displayName, ignoreCase = true)
+
         val title = when {
             isWhisper -> getString(R.string.notification_whisper_mention, displayName)
             isNotify  -> getString(R.string.notification_notify_mention, channel)
-            else      -> getString(R.string.notification_mention, displayName, channel)
+            isUserMention -> getString(R.string.notification_mention, displayName, channel)
+            else      -> getString(R.string.notification_message_mention, displayName, channel)
         }
 
         val notification = NotificationCompat.Builder(this@NotificationService, CHANNEL_ID_DEFAULT)
