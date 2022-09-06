@@ -344,9 +344,9 @@ class NotificationService : Service(), CoroutineScope {
             .build()
 
         val title = when {
-            isWhisper -> getString(R.string.notification_whisper_mention, name)
+            isWhisper -> getString(R.string.notification_whisper_mention, displayName)
             isNotify  -> getString(R.string.notification_notify_mention, channel)
-            else      -> getString(R.string.notification_mention, name, channel)
+            else      -> getString(R.string.notification_mention, displayName, channel)
         }
 
         val notification = NotificationCompat.Builder(this@NotificationService, CHANNEL_ID_DEFAULT)
