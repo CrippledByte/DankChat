@@ -138,6 +138,8 @@ class MainFragment : Fragment() {
 
     private var notificationToggleToast: Toast? = null
 
+    private var backButtonTime: Long = 0
+
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         tabAdapter = ChatTabAdapter(this)
@@ -476,6 +478,28 @@ class MainFragment : Fragment() {
             preferences.unregisterOnSharedPreferenceChangeListener(preferenceListener)
         }
         super.onDestroyView()
+    }
+
+    override fun onAttach(context: Context) {
+        super.onAttach(context)
+
+        // Press twice to exit
+        requireActivity().onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (backButtonTime + 2000 > System.currentTimeMillis()) {
+                    if (!findNavController().navigateUp()) {
+                        if (isEnabled) {
+                            isEnabled = false
+                            requireActivity().onBackPressedDispatcher.onBackPressed()
+                        }
+                    }
+                }
+                else {
+                    Toast.makeText(getContext(), "Press again to exit", Toast.LENGTH_SHORT).show()
+                }
+                backButtonTime = System.currentTimeMillis()
+            }
+        })
     }
 
     fun openUserPopup(targetUserId: String, targetUserName: String, messageId: String, channel: String?, badges: List<Badge>, isWhisperPopup: Boolean = false) {

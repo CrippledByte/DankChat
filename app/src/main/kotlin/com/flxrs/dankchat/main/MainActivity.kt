@@ -10,8 +10,6 @@ import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.util.Log
-import android.widget.Toast
-import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
@@ -68,8 +66,6 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
     var isBound = false
     var channelToOpen = ""
 
-    var backButtonTime: Long = 0
-
 //    override fun getDelegate() = BaseContextWrappingDelegate(super.getDelegate())
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -105,19 +101,6 @@ class MainActivity : AppCompatActivity(), PreferenceFragmentCompat.OnPreferenceS
                 }
             }
             .launchIn(lifecycleScope)
-
-        // Press twice to exit
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                if (backButtonTime + 2000 > System.currentTimeMillis()) {
-                    finish()
-                }
-                else {
-                    Toast.makeText(applicationContext, "Press again to exit", Toast.LENGTH_SHORT).show()
-                }
-                backButtonTime = System.currentTimeMillis()
-            }
-        })
     }
 
     override fun onDestroy() {
