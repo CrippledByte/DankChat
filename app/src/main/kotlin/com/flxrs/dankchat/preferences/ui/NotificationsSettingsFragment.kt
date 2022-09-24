@@ -41,10 +41,10 @@ class NotificationsSettingsFragment : MaterialPreferenceFragmentCompat() {
 
         val preferences = PreferenceManager.getDefaultSharedPreferences(view.context)
         findPreference<Preference>(getString(R.string.preference_custom_mentions_key))?.apply {
-            setOnPreferenceClickListener { showMultiEntryPreference(view, key, preferences, title) }
+            setOnPreferenceClickListener { showMultiEntryPreference(view, key, preferences, title, "mentions") }
         }
         findPreference<Preference>(getString(R.string.preference_blacklist_key))?.apply {
-            setOnPreferenceClickListener { showMultiEntryPreference(view, key, preferences, title) }
+            setOnPreferenceClickListener { showMultiEntryPreference(view, key, preferences, title, "blacklist") }
         }
     }
 
@@ -52,7 +52,7 @@ class NotificationsSettingsFragment : MaterialPreferenceFragmentCompat() {
         setPreferencesFromResource(R.xml.notifications_settings, rootKey)
     }
 
-    private fun showMultiEntryPreference(root: View, key: String, sharedPreferences: SharedPreferences, title: CharSequence?): Boolean {
+    private fun showMultiEntryPreference(root: View, key: String, sharedPreferences: SharedPreferences, title: CharSequence?, type: String): Boolean {
         val context = root.context
         val windowHeight = resources.displayMetrics.heightPixels
         val peekHeight = (windowHeight * 0.6).roundToInt()
@@ -76,17 +76,23 @@ class NotificationsSettingsFragment : MaterialPreferenceFragmentCompat() {
             multiEntryClear.setOnClickListener{
                 // Show dialog before removing all entries
                 val builder = AlertDialog.Builder(context)
-                builder.setMessage("Do you want to clear all mentions?")
-                    .setTitle("Clear mentions")
-                    .setPositiveButton("Clear"
-                    ) { _, _ ->
+                    .setPositiveButton("Clear") { _, _ ->
                         entryAdapter.entries.clear() // remove all entries
                         multiEntryList.adapter = entryAdapter // reload entries
                         entryAdapter.entries.add(MultiEntryItem.AddEntry) // add 'Add an entry' button again
                     }
                     .setNegativeButton("Cancel") { _, _ -> }
-                    .create()
-                    .show()
+
+                if (type == "mentions") {
+                    builder.setTitle("Clear mentions")
+                    builder.setMessage("Do you want to clear all mentions?")
+                }
+                else if (type == "blacklist") {
+                    builder.setTitle("Clear blacklist")
+                    builder.setMessage("Do you want to clear all blacklist items?")
+                }
+
+                builder.create().show()
             }
         }
 
