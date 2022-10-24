@@ -54,9 +54,9 @@ class DankChatPreferenceStore @Inject constructor(private val context: Context) 
         get() = dankChatPreferences.getString(ID_STRING_KEY, null)
         set(value) = dankChatPreferences.edit { putString(ID_STRING_KEY, value) }
 
-    var hasNuulsAcknowledged: Boolean
-        get() = dankChatPreferences.getBoolean(NUULS_ACK_KEY, false)
-        set(value) = dankChatPreferences.edit { putBoolean(NUULS_ACK_KEY, value) }
+    var hasExternalHostingAcknowledged: Boolean
+        get() = dankChatPreferences.getBoolean(EXTERNAL_HOSTING_ACK_KEY, false)
+        set(value) = dankChatPreferences.edit { putBoolean(EXTERNAL_HOSTING_ACK_KEY, value) }
 
     var hasMessageHistoryAcknowledged: Boolean
         get() = dankChatPreferences.getBoolean(MESSAGES_HISTORY_ACK_KEY, false)
@@ -67,8 +67,8 @@ class DankChatPreferenceStore @Inject constructor(private val context: Context) 
             val url = dankChatPreferences.getString(UPLOADER_URL, UPLOADER_URL_DEFAULT) ?: UPLOADER_URL_DEFAULT
             val formField = dankChatPreferences.getString(UPLOADER_FORM_FIELD, UPLOADER_FORM_FIELD_DEFAULT) ?: UPLOADER_FORM_FIELD_DEFAULT
             val headers = dankChatPreferences.getString(UPLOADER_HEADERS, null)
-            val imageLinkPattern = dankChatPreferences.getString(UPLOADER_IMAGE_LINK, null)
-            val deletionLinkPattern = dankChatPreferences.getString(UPLOADER_DELETION_LINK, null)
+            val imageLinkPattern = dankChatPreferences.getString(UPLOADER_IMAGE_LINK, UPLOADER_IMAGE_LINK_DEFAULT) ?: UPLOADER_IMAGE_LINK_DEFAULT
+            val deletionLinkPattern = dankChatPreferences.getString(UPLOADER_DELETION_LINK, UPLOADER_DELETE_LINK_DEFAULT) ?: UPLOADER_DELETE_LINK_DEFAULT
 
             return ImageUploader(
                 uploadUrl = url,
@@ -230,13 +230,8 @@ class DankChatPreferenceStore @Inject constructor(private val context: Context) 
     }
 
     fun resetImageUploader(): ImageUploader {
-        return ImageUploader(
-            uploadUrl = UPLOADER_URL_DEFAULT,
-            formField = UPLOADER_FORM_FIELD_DEFAULT,
-            headers = null,
-            imageLinkPattern = null,
-            deletionLinkPattern = null
-        ).apply { customImageUploader = this }
+        customImageUploader = DEFAULT_UPLOADER
+        return DEFAULT_UPLOADER
     }
 
     fun resetRmHost(): String {
@@ -298,7 +293,7 @@ class DankChatPreferenceStore @Inject constructor(private val context: Context) 
         private const val CHANNELS_AS_STRING_KEY = "channelsAsStringKey"
         private const val ID_KEY = "idKey"
         private const val ID_STRING_KEY = "idStringKey"
-        private const val NUULS_ACK_KEY = "nuulsAckKey"
+        private const val EXTERNAL_HOSTING_ACK_KEY = "nuulsAckKey" // the key is old key to prevent triggering the dialog for existing users
         private const val MESSAGES_HISTORY_ACK_KEY = "messageHistoryAckKey"
 
         private const val UPLOADER_URL = "uploaderUrl"
@@ -307,8 +302,11 @@ class DankChatPreferenceStore @Inject constructor(private val context: Context) 
         private const val UPLOADER_IMAGE_LINK = "uploaderImageLink"
         private const val UPLOADER_DELETION_LINK = "uploaderDeletionLink"
 
-        private const val UPLOADER_URL_DEFAULT = "https://i.nuuls.com/upload"
+        private const val UPLOADER_URL_DEFAULT = "https://kappa.lol/api/upload"
         private const val UPLOADER_FORM_FIELD_DEFAULT = "file"
+        private const val UPLOADER_IMAGE_LINK_DEFAULT = "{link}"
+        private const val UPLOADER_DELETE_LINK_DEFAULT = "{delete}"
+
 
         private const val RM_HOST_DEFAULT = "https://recent-messages.robotty.de/api/v2/"
 
@@ -319,8 +317,8 @@ class DankChatPreferenceStore @Inject constructor(private val context: Context) 
             uploadUrl = UPLOADER_URL_DEFAULT,
             formField = UPLOADER_FORM_FIELD_DEFAULT,
             headers = null,
-            imageLinkPattern = null,
-            deletionLinkPattern = null,
+            imageLinkPattern = UPLOADER_IMAGE_LINK_DEFAULT,
+            deletionLinkPattern = UPLOADER_DELETE_LINK_DEFAULT,
         )
     }
 }

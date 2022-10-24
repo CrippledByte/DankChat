@@ -10,7 +10,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import io.ktor.client.*
-import io.ktor.client.engine.cio.*
+import io.ktor.client.engine.okhttp.*
 import io.ktor.client.plugins.*
 import io.ktor.client.plugins.cache.*
 import io.ktor.client.plugins.contentnegotiation.*
@@ -21,6 +21,8 @@ import kotlinx.serialization.json.Json
 import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 import javax.inject.Singleton
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.toJavaDuration
 
 @InstallIn(SingletonComponent::class)
 @Module
@@ -42,6 +44,13 @@ object NetworkModule {
     fun provideOkHttpClient(): OkHttpClient = OkHttpClient.Builder()
         .build()
 
+    @UploadOkHttpClient
+    @Singleton
+    @Provides
+    fun provideUploadOkHttpClient(): OkHttpClient = OkHttpClient.Builder()
+        .callTimeout(60.seconds.toJavaDuration())
+        .build()
+
     @EmoteOkHttpClient
     @Singleton
     @Provides
@@ -51,12 +60,7 @@ object NetworkModule {
 
     @Singleton
     @Provides
-    fun provideKtorClient(): HttpClient = HttpClient(CIO) {
-        engine {
-            endpoint {
-                connectTimeout = 10000
-            }
-        }
+    fun provideKtorClient(): HttpClient = HttpClient(OkHttp) {
         install(Logging) {
             level = LogLevel.INFO
             logger = object : Logger {
@@ -170,7 +174,7 @@ object NetworkModule {
     @Singleton
     @Provides
     fun provideApiManager(
-        ktorClient: HttpClient,
+        @UploadOkHttpClient okHttpClient: OkHttpClient,
         bttvApiService: BTTVApiService,
         dankChatApiService: DankChatApiService,
         ffzApiService: FFZApiService,
@@ -184,7 +188,7 @@ object NetworkModule {
         ivrApiService: IvrApiService,
         dankChatPreferenceStore: DankChatPreferenceStore
     ): ApiManager = ApiManager(
-        ktorClient,
+        okHttpClient,
         bttvApiService,
         dankChatApiService,
         ffzApiService,

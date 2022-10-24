@@ -1,6 +1,7 @@
 package com.flxrs.dankchat.main
 
 import android.content.Context
+import android.os.Build
 import android.util.AttributeSet
 import android.view.KeyEvent
 import android.widget.AdapterView
@@ -14,10 +15,13 @@ class DankChatInput : AppCompatMultiAutoCompleteTextView {
     constructor(context: Context, attrs: AttributeSet?, defStyleAttr: Int) : super(context, attrs, defStyleAttr)
 
     override fun onKeyPreIme(keyCode: Int, event: KeyEvent?): Boolean {
-        if (event?.keyCode == KeyEvent.KEYCODE_BACK) clearFocus()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M && event?.keyCode == KeyEvent.KEYCODE_BACK) {
+            clearFocus()
+        }
 
         return super.onKeyPreIme(keyCode, event)
     }
+
 
     fun setSuggestionAdapter(enabled: Boolean, adapter: SuggestionsArrayAdapter) {
         if (enabled) {

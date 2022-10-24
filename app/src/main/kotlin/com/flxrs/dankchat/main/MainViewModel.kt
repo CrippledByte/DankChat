@@ -191,9 +191,12 @@ class MainViewModel @Inject constructor(
             hasMentions || hasWhispers
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(stopTimeout = 5.seconds), false)
 
-    val shouldShowViewPager: StateFlow<Boolean> = channels
-        .mapLatest { it?.isNotEmpty() ?: true }
+    val shouldShowViewPager: StateFlow<Boolean> = channels.mapLatest { it?.isNotEmpty() ?: true }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(stopTimeout = 5.seconds), true)
+
+    val shouldShowTabs: StateFlow<Boolean> = shouldShowViewPager.combine(_isFullscreen) { shouldShowViewPager, isFullscreen ->
+        shouldShowViewPager && !isFullscreen
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(stopTimeout = 5.seconds), true)
 
     val shouldShowInput: StateFlow<Boolean> = combine(inputEnabled, shouldShowViewPager) { inputEnabled, shouldShowViewPager ->
         inputEnabled && shouldShowViewPager
@@ -256,9 +259,11 @@ class MainViewModel @Inject constructor(
                     is EmoteType.ChannelTwitchEmote,
                     is EmoteType.ChannelTwitchBitEmote,
                     is EmoteType.ChannelTwitchFollowerEmote -> EmoteMenuTab.SUBS
+
                     is EmoteType.ChannelFFZEmote,
                     is EmoteType.ChannelBTTVEmote,
                     is EmoteType.ChannelSevenTVEmote        -> EmoteMenuTab.CHANNEL
+
                     else                                    -> EmoteMenuTab.GLOBAL
                 }
             }
@@ -454,7 +459,7 @@ class MainViewModel @Inject constructor(
 
     fun closeAndReconnect(loadTwitchData: Boolean = false) {
         chatRepository.closeAndReconnect()
-        if (loadTwitchData && dankChatPreferenceStore.isLoggedIn) {
+        if (loadTwitchData) {
             loadData(
                 isUserChange = true,
                 loadTwitchData = true,
@@ -620,7 +625,7 @@ class MainViewModel @Inject constructor(
         emoteUsageRepository.addEmoteUsage(emote.id)
     }
 
-    fun clearEmoteUsages() = viewModelScope.launch {
+    private fun clearEmoteUsages() = viewModelScope.launch {
         emoteUsageRepository.clearUsages()
     }
 
@@ -664,8 +669,8 @@ class MainViewModel @Inject constructor(
     }
 
     private suspend fun getRoomStateIdIfNeeded(channel: String): String? = when {
-        !dankChatPreferenceStore.isLoggedIn -> null
-        else                                -> withTimeoutOrNull(IRC_TIMEOUT_DELAY) {
+        dankChatPreferenceStore.isLoggedIn -> null
+        else                               -> withTimeoutOrNull(IRC_TIMEOUT_DELAY) {
             chatRepository.getRoomState(channel).first { it.channelId.isNotBlank() }.channelId
         }
     }
@@ -686,6 +691,7 @@ class MainViewModel @Inject constructor(
                     parameters = parameters
                 )
             }
+
             else                                -> DataLoadingState.Finished
         }
     }

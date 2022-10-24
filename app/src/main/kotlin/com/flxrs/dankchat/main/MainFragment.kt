@@ -17,8 +17,9 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.result.launch
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
+import androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult
 import androidx.appcompat.app.AppCompatActivity
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
@@ -56,7 +57,6 @@ import com.flxrs.dankchat.data.twitch.emote.GenericEmote
 import com.flxrs.dankchat.databinding.EditDialogBinding
 import com.flxrs.dankchat.databinding.MainFragmentBinding
 import com.flxrs.dankchat.preferences.DankChatPreferenceStore
-import com.flxrs.dankchat.utils.GetImageOrVideoContract
 import com.flxrs.dankchat.utils.createMediaFile
 import com.flxrs.dankchat.utils.extensions.*
 import com.flxrs.dankchat.utils.removeExifAttributes
@@ -72,6 +72,7 @@ import com.google.android.material.tabs.TabLayoutMediator
 import dagger.hilt.android.AndroidEntryPoint
 import java.io.File
 import java.io.IOException
+import java.net.URL
 import java.util.*
 import javax.inject.Inject
 import kotlin.math.roundToInt
@@ -108,9 +109,9 @@ class MainFragment : Fragment() {
     private var currentMediaUri = Uri.EMPTY
     private val tabSelectionListener = TabSelectionListener()
 
-    private val requestImageCapture = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { if (it.resultCode == Activity.RESULT_OK) handleCaptureRequest(imageCapture = true) }
-    private val requestVideoCapture = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { if (it.resultCode == Activity.RESULT_OK) handleCaptureRequest() }
-    private val requestGalleryMedia = registerForActivityResult(GetImageOrVideoContract()) { uri ->
+    private val requestImageCapture = registerForActivityResult(StartActivityForResult()) { if (it.resultCode == Activity.RESULT_OK) handleCaptureRequest(imageCapture = true) }
+    private val requestVideoCapture = registerForActivityResult(StartActivityForResult()) { if (it.resultCode == Activity.RESULT_OK) handleCaptureRequest() }
+    private val requestGalleryMedia = registerForActivityResult(PickVisualMedia()) { uri ->
         uri ?: return@registerForActivityResult
         val contentResolver = activity?.contentResolver ?: return@registerForActivityResult
         val context = context ?: return@registerForActivityResult
@@ -183,6 +184,7 @@ class MainFragment : Fragment() {
                         }
                         true
                     }
+
                     MotionEvent.ACTION_DOWN -> true
                     else                    -> false
                 }
@@ -255,7 +257,7 @@ class MainFragment : Fragment() {
                     R.id.menu_block_channel  -> blockChannel()
                     R.id.menu_manage         -> openManageChannelsDialog()
                     R.id.menu_reload_emotes  -> reloadEmotes()
-                    R.id.menu_choose_media   -> showNuulsUploadDialogIfNotAcknowledged { requestGalleryMedia.launch() }
+                    R.id.menu_choose_media   -> showExternalHostingUploadDialogIfNotAcknowledged { requestGalleryMedia.launch(PickVisualMediaRequest(PickVisualMedia.ImageAndVideo)) }
                     R.id.menu_capture_image  -> startCameraCapture()
                     R.id.menu_capture_video  -> startCameraCapture(captureVideo = true)
                     R.id.menu_clear          -> clear()
@@ -366,6 +368,7 @@ class MainFragment : Fragment() {
                             .setNegativeButton(getString(R.string.dialog_dismiss)) { _, _ -> } // default action is dismissing anyway
                             .create().show()
                     }
+
                     ValidationResult.Failure      -> showSnackBar(getString(R.string.oauth_verify_failed))
                 }
             }
@@ -384,6 +387,7 @@ class MainFragment : Fragment() {
                     LOGOUT_REQUEST_KEY      -> handle.withData<Boolean>(key) {
                         showLogoutConfirmationDialog()
                     }
+
                     CHANNELS_REQUEST_KEY    -> handle.withData<Array<String>>(key) {
                         updateChannels(it.toList())
                     }
@@ -409,6 +413,20 @@ class MainFragment : Fragment() {
             setSupportActionBar(binding.toolbar)
             onBackPressedDispatcher.addCallback(viewLifecycleOwner, onBackPressedCallback)
 
+            var wasKeyboardOpen = false
+            ViewCompat.setOnApplyWindowInsetsListener(binding.root) { _, insets ->
+                val isKeyboardVisible = insets.isVisible(WindowInsetsCompat.Type.ime())
+                if (wasKeyboardOpen == isKeyboardVisible) {
+                    return@setOnApplyWindowInsetsListener insets
+                }
+
+                wasKeyboardOpen = isKeyboardVisible
+                if (binding.input.isFocused && !isKeyboardVisible) {
+                    binding.input.clearFocus()
+                }
+
+                insets
+            }
             ViewCompat.setOnApplyWindowInsetsListener(binding.showChips) { v, insets ->
                 val needsExtraMargin = binding.streamWebviewWrapper.isVisible || isLandscape || !mainViewModel.isFullscreenFlow.value
                 val extraMargin = when {
@@ -622,6 +640,7 @@ class MainFragment : Fragment() {
                 message = result.errorMessage?.let { getString(R.string.snackbar_upload_failed_cause, it) } ?: getString(R.string.snackbar_upload_failed),
                 onDismiss = { result.mediaFile.delete() },
                 action = getString(R.string.snackbar_retry) to { mainViewModel.uploadMedia(result.mediaFile) })
+
             is ImageUploadState.Finished                       -> {
                 val clipboard = getSystemService(requireContext(), ClipboardManager::class.java)
                 clipboard?.setPrimaryClip(ClipData.newPlainText(CLIPBOARD_LABEL, result.url))
@@ -696,9 +715,15 @@ class MainFragment : Fragment() {
         suggestionAdapter.setSuggestions(suggestions)
     }
 
-    private inline fun showNuulsUploadDialogIfNotAcknowledged(crossinline action: () -> Unit) {
-        if (!dankChatPreferences.hasNuulsAcknowledged) {
-            val spannable = SpannableStringBuilder(getString(R.string.nuuls_upload_disclaimer))
+    private inline fun showExternalHostingUploadDialogIfNotAcknowledged(crossinline action: () -> Unit) {
+        // show host name in dialog, another nice thing we get is it also detect some invalid URLs
+        val host = runCatching {
+            URL(dankChatPreferences.customImageUploader.uploadUrl).host
+        }.getOrElse { "" }
+
+        // if config is invalid, just let the error handled by HTTP client
+        if (host.isNotBlank() && !dankChatPreferences.hasExternalHostingAcknowledged) {
+            val spannable = SpannableStringBuilder(getString(R.string.external_upload_disclaimer, host))
             Linkify.addLinks(spannable, Linkify.WEB_URLS)
 
             MaterialAlertDialogBuilder(requireContext())
@@ -707,7 +732,7 @@ class MainFragment : Fragment() {
                 .setMessage(spannable)
                 .setPositiveButton(R.string.dialog_ok) { dialog, _ ->
                     dialog.dismiss()
-                    dankChatPreferences.hasNuulsAcknowledged = true
+                    dankChatPreferences.hasExternalHostingAcknowledged = true
                     action()
                 }
                 .show().also { it.findViewById<TextView>(android.R.id.message)?.movementMethod = LinkMovementMethod.getInstance() }
@@ -722,7 +747,7 @@ class MainFragment : Fragment() {
             captureVideo -> MediaStore.ACTION_VIDEO_CAPTURE to "mp4"
             else         -> MediaStore.ACTION_IMAGE_CAPTURE to "jpg"
         }
-        showNuulsUploadDialogIfNotAcknowledged {
+        showExternalHostingUploadDialogIfNotAcknowledged {
             Intent(action).also { captureIntent ->
                 captureIntent.resolveActivity(packageManager)?.also {
                     try {
@@ -745,11 +770,6 @@ class MainFragment : Fragment() {
     private fun changeActionBarVisibility(isFullscreen: Boolean) {
         hideKeyboard()
         (activity as? MainActivity)?.setFullScreen(isFullscreen)
-
-        with(binding) {
-            input.clearFocus()
-            tabs.isVisible = !isFullscreen
-        }
     }
 
     private fun clear() {
@@ -868,9 +888,10 @@ class MainFragment : Fragment() {
     }
 
     private fun blockChannel() {
+        val activeChannel = mainViewModel.getActiveChannel() ?: return
         MaterialAlertDialogBuilder(requireContext())
-            .setTitle(R.string.confirm_user_block_title)
-            .setMessage(R.string.confirm_user_block_message)
+            .setTitle(R.string.confirm_channel_block_title)
+            .setMessage(getString(R.string.confirm_channel_block_message_named, activeChannel))
             .setPositiveButton(R.string.confirm_user_block_positive_button) { _, _ ->
                 mainViewModel.blockUser()
                 removeChannel()
@@ -883,8 +904,16 @@ class MainFragment : Fragment() {
     private fun removeChannel() {
         val activeChannel = mainViewModel.getActiveChannel() ?: return
         val channels = mainViewModel.getChannels().ifEmpty { return }
-        val updatedChannels = channels - activeChannel
-        updateChannels(updatedChannels)
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.confirm_channel_removal_title)
+            // should give user more info that it's gonna delete the currently active channel (unlike when clicking delete from manage channels list, where is very obvious)
+            .setMessage(getString(R.string.confirm_channel_removal_message_named, activeChannel))
+            .setPositiveButton(R.string.confirm_channel_removal_positive_button) { _, _ ->
+                val updatedChannels = channels - activeChannel
+                updateChannels(updatedChannels)
+            }
+            .setNegativeButton(R.string.dialog_cancel) { _, _ -> }
+            .create().show()
     }
 
     private fun openManageChannelsDialog() {
@@ -912,6 +941,7 @@ class MainFragment : Fragment() {
                         mainViewModel.changeRoomState(index, enabled = true)
                         d.dismiss()
                     }
+
                     else    -> {
                         val title = choices[index]
                         val hint = if (index == 2) R.string.seconds else R.string.minutes
@@ -1009,6 +1039,7 @@ class MainFragment : Fragment() {
                     }
                 }
             }
+
             else                                       -> false
         }
 
@@ -1061,6 +1092,7 @@ class MainFragment : Fragment() {
                                         (activity as? AppCompatActivity)?.supportActionBar?.hide()
                                         binding.tabs.visibility = View.GONE
                                     }
+
                                     else                                                                    -> {
                                         (activity as? AppCompatActivity)?.supportActionBar?.show()
                                         binding.tabs.visibility = View.VISIBLE
@@ -1103,6 +1135,7 @@ class MainFragment : Fragment() {
                 KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
                     if (!isItemSelected()) sendMessage() else false
                 }
+
                 else                                                  -> false
             }
         }
@@ -1137,6 +1170,7 @@ class MainFragment : Fragment() {
                     supportActionBar?.hide()
                     setFullScreen(enabled = false, changeActionBarVisibility = false)
                 }
+
                 else     -> (activity as? MainActivity)?.setFullScreen(isFullscreen)
             }
 

@@ -1,18 +1,20 @@
 package com.flxrs.dankchat.data.api
 
 import android.util.Log
+import com.flxrs.dankchat.BuildConfig
 import com.flxrs.dankchat.data.api.dto.*
 import com.flxrs.dankchat.preferences.DankChatPreferenceStore
-import io.ktor.client.*
 import io.ktor.client.call.*
-import io.ktor.client.engine.cio.*
-import io.ktor.client.request.*
-import io.ktor.client.request.forms.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.Response
 import org.json.JSONObject
 import java.io.File
 import java.net.URLConnection
@@ -20,7 +22,7 @@ import java.time.Instant
 import javax.inject.Inject
 
 class ApiManager @Inject constructor(
-    private val client: HttpClient,
+    private val uploadClient: OkHttpClient,
     private val bttvApiService: BTTVApiService,
     private val dankChatApiService: DankChatApiService,
     private val ffzApiService: FFZApiService,
@@ -34,14 +36,6 @@ class ApiManager @Inject constructor(
     private val ivrApiService: IvrApiService,
     private val dankChatPreferenceStore: DankChatPreferenceStore
 ) {
-
-    @Suppress("UNCHECKED_CAST")
-    private val uploadClient = client.config {
-        this as HttpClientConfig<CIOEngineConfig>
-        engine {
-            requestTimeout = 60_000
-        }
-    }
 
     suspend fun validateUser(token: String): ValidateUserDto? = authApiService.validateUser(token).bodyOrNull()
 
@@ -116,28 +110,37 @@ class ApiManager @Inject constructor(
 
     suspend fun uploadMedia(file: File): Result<UploadDto> = withContext(Dispatchers.IO) {
         val uploader = dankChatPreferenceStore.customImageUploader
-        val extension = file.extension.ifBlank { "png" }
         val mimetype = URLConnection.guessContentTypeFromName(file.name)
-        val headers = Headers.build {
-            append(HttpHeaders.ContentType, mimetype.toMediaType().toString())
-            append(HttpHeaders.ContentDisposition, "filename=${uploader.formField}.$extension")
-        }
-        val formData = formData {
-            append(uploader.formField, file.readBytes(), headers)
-        }
-        val response = uploadClient.submitFormWithBinaryData(uploader.uploadUrl, formData) {
-            uploader.parsedHeaders.forEach { (key, value) ->
-                header(key, value)
+
+        val requestBody = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart(name = uploader.formField, filename = file.name, body = file.asRequestBody(mimetype.toMediaType()))
+            .build()
+        val request = Request.Builder()
+            .url(uploader.uploadUrl)
+            .header(HttpHeaders.UserAgent, "dankchat/${BuildConfig.VERSION_NAME}")
+            .apply {
+                uploader.parsedHeaders.forEach { (name, value) ->
+                    header(name, value)
+                }
             }
+            .post(requestBody)
+            .build()
+
+        val response = runCatching {
+            uploadClient.newCall(request).execute()
+        }.getOrElse {
+            return@withContext Result.failure(it)
         }
+
         when {
-            response.status.isSuccess() -> {
+            response.isSuccessful -> {
                 val imageLinkPattern = uploader.imageLinkPattern
                 val deletionLinkPattern = uploader.deletionLinkPattern
 
                 if (imageLinkPattern == null) {
                     return@withContext runCatching {
-                        val body = response.bodyAsText()
+                        val body = response.body.string()
                         UploadDto(
                             imageLink = body,
                             deleteLink = null,
@@ -158,9 +161,10 @@ class ApiManager @Inject constructor(
                 }
 
             }
-            else                        -> {
-                Log.d("ApiManager", "Upload failed with ${response.status} ${response.bodyAsText()}")
-                Result.failure(ApiException(response.status.value, response.status.description))
+
+            else                  -> {
+                Log.d("ApiManager", "Upload failed with ${response.code} ${response.message}")
+                Result.failure(ApiException(response.code, response.message))
             }
         }
     }
@@ -179,8 +183,8 @@ class ApiManager @Inject constructor(
         imageLink
     }
 
-    private suspend fun HttpResponse.asJsonObject(): Result<JSONObject> = runCatching {
-        val bodyString = bodyAsText()
+    private fun Response.asJsonObject(): Result<JSONObject> = runCatching {
+        val bodyString = body.string()
         JSONObject(bodyString)
     }.onFailure {
         Log.d("ApiManager", "Error creating JsonObject from response: ", it)

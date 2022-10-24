@@ -35,6 +35,7 @@
     <string name="uploading_image">Nahrávání souboru</string>
     <string name="settings">Nastavení</string>
     <string name="nuuls_upload_disclaimer">Externí hostování poskytované https://nuuls.com/i ,používejte na vlastní riziko.</string>
+    <string name="external_upload_disclaimer">Externí hostování poskytované %1$s ,používejte na vlastní riziko.</string>
     <string name="nuuls_upload_title">Nahrání vlastního obrázku</string>
     <string name="snackbar_message_copied">Zpráva zkopírována</string>
     <string name="snackbar_error_copied">Informace o chybě zkopírovány</string>
@@ -94,7 +95,10 @@ Služba dočasně ukládá zprávy pro kanály, které vy (a další) navštív�
     <string name="mentions">Zmínky</string>
     <string name="confirm_channel_removal_title">Potvrdit odebrání kanálu</string>
     <string name="confirm_channel_removal_message">Jste si jistí, že chcete tento kanál odebrat?</string>
+    <string name="confirm_channel_removal_message_named">Jste si jistí, že chcete smazat kanál \"%1$s\"?</string>
     <string name="confirm_channel_removal_positive_button">Odebrat</string>
+    <string name="confirm_channel_block_title">Potvrdit zablokování kanálu</string>
+    <string name="confirm_channel_block_message_named">Jste si jistí, že si chcete zablokovat kanál \"%1$s\"?</string>
     <string name="user_popup_follow">Sledovat</string>
     <string name="user_popup_unfollow">Přestat sledovat</string>
     <string name="user_popup_block">Zablokovat</string>
@@ -272,6 +276,14 @@ Koukněte na tento návod pro pomoc: https://wiki.chatterino.com/Image%20Uploade
     <string name="oauth_expired_message">Váš přihlašovací token vypršel! Přihlašte se prosím znovu.</string>
     <string name="oauth_expired_login_again">Znovu se přihlásit</string>
     <string name="oauth_verify_failed">Nepodařilo se ověřit přihlašovací token, zkontrolujte připojení k internetu.</string>
+    <string name="preference_retain_webview_title">Zabránit opětovnému načítání streamu</string>
+    <string name="preference_retain_webview_summary">Zapne experimentální funkci zabránění opětovnému načtení streamu po změně orientace obrazovky nebo opětovném otevření DankChatu.</string>
+    <string name="reset_media_uploader_dialog_title">Obnovit nastavení nahrávače médií</string>
+    <string name="reset_media_uploader_dialog_message">Jste si jístí, že chcete obnovit výchozí nastavení nahrávače médií?</string>
+    <string name="reset_media_uploader_dialog_positive">Obnovit</string>
+    <string name="clear_recent_uploads_dialog_title">Vymazat nedávná nahrání</string>
+    <string name="clear_recent_uploads_dialog_message">Jste si jistí, že chcete smazat historii nahrávání? Vaše nahrané soubory nebudou smazány.</string>
+    <string name="clear_recent_uploads_dialog_positive">Vymazat</string>
     <plurals name="viewers">
         <item quantity="one">Živě s %d divákem</item>
         <item quantity="few">Živě se %d diváky</item>
