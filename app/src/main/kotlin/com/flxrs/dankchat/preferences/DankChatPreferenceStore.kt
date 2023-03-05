@@ -267,6 +267,15 @@ class DankChatPreferenceStore @Inject constructor(
         }
     }
 
+    val isNotificationsEnabled: Boolean
+        get() = defaultPreferences.getBoolean(context.getString(R.string.preference_notification_key), true)
+
+    fun toggleNotifications() = dankChatPreferences.edit {
+        val editor = defaultPreferences.edit()
+        editor.putBoolean(context.getString(R.string.preference_notification_key), !isNotificationsEnabled)
+        editor.apply()
+    }
+
     fun formatViewersString(viewers: Int): String = context.resources.getQuantityString(R.plurals.viewers, viewers, viewers)
 
     fun clearLogin() = dankChatPreferences.edit {

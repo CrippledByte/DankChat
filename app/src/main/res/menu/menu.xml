@@ -9,6 +9,12 @@
         app:showAsAction="always" />
 
     <item
+        android:id="@+id/menu_toggle_notifications"
+        android:icon="@drawable/ic_notification_icon"
+        android:title="Toggle notifications"
+        app:showAsAction="always" />
+
+    <item
         android:id="@+id/menu_add"
         android:icon="@drawable/ic_add_box"
         android:title="@string/add_channel"
@@ -18,7 +24,7 @@
         android:id="@+id/menu_mentions"
         android:icon="@drawable/ic_notifications_active"
         android:title="@string/mentions_title"
-        app:showAsAction="ifRoom" />
+        app:showAsAction="always" />
 
     <item
         android:id="@+id/menu_login"
