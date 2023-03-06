@@ -7,8 +7,7 @@ import kotlinx.serialization.Serializable
 @Keep
 @Serializable
 data class IvrSubageDto(
-    @SerialName(value = "hidden") val hidden: Boolean,
-    @SerialName(value = "subscribed") val subscribed: Boolean,
+    @SerialName(value = "statusHidden") val hidden: Boolean,
     @SerialName(value = "meta") val meta: Meta?,
     @SerialName(value = "cumulative") val cumulative: Cumulative?
 )

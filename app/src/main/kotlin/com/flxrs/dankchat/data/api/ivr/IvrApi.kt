@@ -7,6 +7,6 @@ import io.ktor.client.request.*
 
 class IvrApi(private val ktorClient: HttpClient) {
 
-    suspend fun getSubage(channel: UserName, userName: UserName) = ktorClient.get("twitch/subage/$userName/$channel")
+    suspend fun getSubage(channel: UserName, userName: UserName) = ktorClient.get("v2/twitch/subage/$userName/$channel")
 
 }

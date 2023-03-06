@@ -171,7 +171,7 @@ class UserPopupViewModel @Inject constructor(
             followingSince = channelUserFollows?.data?.firstOrNull()?.followedAt?.asParsedZonedDateTime(),
             isBlocked = isBlocked,
             isSubscriptionHidden = subage?.getOrNull()?.let { it.hidden } == true,
-            isSubscribed = subage?.getOrNull()?.let { it.subscribed } == true,
+            isSubscribed = subage?.getOrNull()?.meta != null, // subscribed if "meta" object is not null
             subscriptionTier = subage?.getOrNull()?.let { it.meta?.tier } ?: "?",
             subscribedMonths = subage?.getOrNull()?.let { it.cumulative?.months } ?: 0
         )
