@@ -34,10 +34,9 @@ data class PrivMessage(
     val isSubscribed: Boolean = false,
     val subscriptionMonths: Int = 0,
     val subscriptionTier: Int? = null,
+    override val emoteData: EmoteData = EmoteData(originalMessage, channel, emotesWithPositions = parseEmoteTag(originalMessage, tags["emotes"].orEmpty())),
+    override val badgeData: BadgeData = BadgeData(userId, channel, badgeTag = tags["badges"], badgeInfoTag = tags["badge-info"]),
 ) : Message() {
-
-    override val emoteData: EmoteData = EmoteData(originalMessage, channel, emoteTag = tags["emotes"].orEmpty())
-    override val badgeData: BadgeData = BadgeData(userId, channel, badgeTag = tags["badges"], badgeInfoTag = tags["badge-info"])
 
     companion object {
         fun parsePrivMessage(ircMessage: IrcMessage): PrivMessage = with(ircMessage) {
