@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.updateLayoutParams
 import androidx.fragment.app.viewModels
@@ -56,6 +57,19 @@ class NotificationsSettingsFragment : MaterialPreferenceFragmentCompat() {
         val highlightsAdapter = HighlightsTabAdapter(
             onAddItem = highlightsViewModel::addHighlight,
             onDeleteItem = highlightsViewModel::removeHighlight,
+            onDeleteTabItems = {
+                // Show dialog before removing all entries
+                val builder = context?.let { AlertDialog.Builder(it) } ?: return@HighlightsTabAdapter
+                builder.setMessage("Do you want to remove all items?")
+                        .setTitle("Remove items")
+                        .setPositiveButton("Remove"
+                        ) { _, _ ->
+                            highlightsViewModel.removeTabHighlights()
+                        }
+                        .setNegativeButton("Cancel") { _, _ -> }
+                        .create()
+                        .show()
+            },
             preferences = preferences,
         )
         val ignoresAdapter = IgnoresTabAdapter(

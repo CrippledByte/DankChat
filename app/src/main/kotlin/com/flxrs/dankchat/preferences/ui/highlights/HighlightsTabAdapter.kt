@@ -12,6 +12,7 @@ import com.flxrs.dankchat.preferences.DankChatPreferenceStore
 class HighlightsTabAdapter(
     private val onAddItem: () -> Unit,
     private val onDeleteItem: (item: HighlightItem) -> Unit,
+    private val onDeleteTabItems: () -> Unit,
     private val preferences: DankChatPreferenceStore,
 ) : ListAdapter<HighlightsTabItem, HighlightsTabAdapter.ItemViewHolder>(DetectDiff()) {
 
@@ -20,7 +21,7 @@ class HighlightsTabAdapter(
     override fun getItemCount(): Int = HighlightsTab.values().size
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ItemViewHolder {
-        val adapter = HighlightsItemAdapter(onAddItem, onDeleteItem, preferences)
+        val adapter = HighlightsItemAdapter(onAddItem, onDeleteItem, onDeleteTabItems, preferences)
         val binding = TabListBinding.inflate(LayoutInflater.from(parent.context), parent, false).apply {
             tabList.layoutManager = LinearLayoutManager(parent.context)
             tabList.adapter = adapter

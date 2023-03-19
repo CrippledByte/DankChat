@@ -201,6 +201,7 @@ class DeveloperSettingsFragment : MaterialPreferenceFragmentCompat() {
                 val highlightsAdapter = HighlightsTabAdapter(
                     onAddItem = highlightsViewModel::addHighlight,
                     onDeleteItem = highlightsViewModel::removeHighlight,
+                    onDeleteTabItems = highlightsViewModel::removeTabHighlights,
                     preferences = dankChatPreferenceStore,
                 )
 

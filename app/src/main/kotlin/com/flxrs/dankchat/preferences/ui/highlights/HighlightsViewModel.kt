@@ -170,6 +170,40 @@ class HighlightsViewModel @Inject constructor(
         }
     }
 
+    fun removeTabHighlights() = viewModelScope.launch {
+        when (_currentTab.value) {
+            HighlightsTab.Messages         -> {
+                val messageHighlights = highlightsRepository.messageHighlights.value.map { it.toItem() }
+
+                // Remove each custom message highlight
+                for (item in messageHighlights.filter { it.type == MessageHighlightItem.Type.Custom }) {
+                    highlightsRepository.removeMessageHighlight(item.toEntity())
+                    messageHighlightsTab.update { it.copy(items = it.items - item) }
+                }
+            }
+
+            HighlightsTab.Users            -> {
+                val userHighlights = highlightsRepository.userHighlights.value.map { it.toItem() }
+
+                // Remove each user highlight
+                for (item in userHighlights) {
+                    highlightsRepository.removeUserHighlight(item.toEntity())
+                    userHighlightsTab.update { it.copy(items = it.items - item) }
+                }
+            }
+
+            HighlightsTab.BlacklistedUsers -> {
+                val blacklistedUsers = highlightsRepository.blacklistedUsers.value.map { it.toItem() }
+
+                // Remove each blacklisted user
+                for (item in blacklistedUsers) {
+                    highlightsRepository.removeBlacklistedUser(item.toEntity())
+                    blacklistedUsersTab.update { it.copy(items = it.items - item) }
+                }
+            }
+        }
+    }
+
     companion object {
         private val INITIAL_STATE = listOf(
             HighlightsTabItem(HighlightsTab.Messages, listOf(AddItem)),

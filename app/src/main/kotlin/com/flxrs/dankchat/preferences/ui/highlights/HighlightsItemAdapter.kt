@@ -18,6 +18,7 @@ import com.flxrs.dankchat.preferences.DankChatPreferenceStore
 class HighlightsItemAdapter(
     private val onAddItem: () -> Unit,
     private val onDeleteItem: (item: HighlightItem) -> Unit,
+    private val onDeleteTabItems: () -> Unit,
     private val preferenceStore: DankChatPreferenceStore,
 ) : ListAdapter<HighlightItem, RecyclerView.ViewHolder>(DetectDiff()) {
 
@@ -44,6 +45,7 @@ class HighlightsItemAdapter(
     inner class AddViewHolder(binding: AddItemBinding) : RecyclerView.ViewHolder(binding.root) {
         init {
             binding.multiEntryAdd.setOnClickListener { onAddItem() }
+            binding.multiEntryRemoveAll.setOnClickListener { onDeleteTabItems() }
         }
     }
 
