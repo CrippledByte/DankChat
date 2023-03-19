@@ -174,4 +174,8 @@ dependencies {
     testImplementation(libs.junit.jupiter.engine)
     testImplementation(libs.mockk)
     testImplementation(libs.kotlin.test)
+
+// JSON parser
+    implementation("com.squareup.moshi:moshi:1.14.0")
+    kapt("com.squareup.moshi:moshi-kotlin-codegen:1.14.0")
 }

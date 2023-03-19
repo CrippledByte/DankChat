@@ -367,6 +367,8 @@
     <string name="user_display_custom_alias_enable">Custom Alias</string>
     <string name="pick_custom_user_color_title">Pick custom user color</string>
     <string name="custom_user_display_summary">Add a custom name and color for users</string>
+    <string name="preference_import_settings_key" translatable="false">import_settings_key</string>
+    <string name="preference_import_settings_title">Import settings</string>
     <plurals name="viewers">
         <item quantity="one">Live with %d viewer</item>
         <item quantity="other">Live with %d viewers</item>

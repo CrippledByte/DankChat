@@ -27,4 +27,9 @@
         android:key="@string/preference_rm_host_key"
         android:title="@string/preference_rm_host_title"
         app:iconSpaceReserved="false" />
+
+    <Preference
+        android:key="@string/preference_import_settings_key"
+        android:title="@string/preference_import_settings_title"
+        app:iconSpaceReserved="false" />
 </PreferenceScreen>

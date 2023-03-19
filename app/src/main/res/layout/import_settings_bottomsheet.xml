@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layout xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <LinearLayout
+        android:id="@+id/import_settings_sheet"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:paddingHorizontal="8dp"
+        android:paddingBottom="8dp">
+
+        <com.google.android.material.bottomsheet.BottomSheetDragHandleView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
+        <TextView
+            android:id="@+id/import_settings_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="24dp"
+            android:gravity="center_horizontal"
+            android:text="Import settings from Chatterino"
+            android:textAppearance="?attr/textAppearanceTitleMedium" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_horizontal"
+            android:text="Copy text from Chatterino's settings.json and paste below.\n\nWindows:\n%appdata%/Chatterino2/Settings/settings.json" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/import_settings_paste"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginTop="24dp"
+            android:text="Paste from clipboard" />
+
+        <TextView
+            android:id="@+id/import_settings_paste_info"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:layout_marginTop="16dp" />
+
+        <LinearLayout
+            android:id="@+id/import_settings_checkbox_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="36dp"
+            android:layout_marginRight="36dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                android:text="Select settings to import:"/>
+
+            <com.google.android.material.checkbox.MaterialCheckBox
+                android:id="@+id/import_settings_checkbox_appearance"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Appearance (separate messages with lines, checkered lines)" />
+
+            <com.google.android.material.checkbox.MaterialCheckBox
+                android:id="@+id/import_settings_checkbox_chat"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Chat (history, timestamps, visible messages, badges and emotes)" />
+
+            <com.google.android.material.checkbox.MaterialCheckBox
+                android:id="@+id/import_settings_checkbox_message_highlights"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Message highlights" />
+
+            <com.google.android.material.checkbox.MaterialCheckBox
+                android:id="@+id/import_settings_checkbox_user_highlights"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="User highlights" />
+
+            <RelativeLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/import_settings_select_all"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_alignParentLeft="true"
+                    android:text="Select all" />
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_alignParentRight="true">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/import_settings_import"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Import" />
+
+                    <TextView
+                        android:id="@+id/import_settings_import_info"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center"
+                        android:layout_marginTop="16dp" />
+                </LinearLayout>
+            </RelativeLayout>
+        </LinearLayout>
+    </LinearLayout>
+</layout>
