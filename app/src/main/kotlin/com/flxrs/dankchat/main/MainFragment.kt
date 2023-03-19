@@ -437,6 +437,7 @@ class MainFragment : Fragment() {
 
         (requireActivity() as AppCompatActivity).apply {
             setSupportActionBar(binding.toolbar)
+            supportActionBar?.setDisplayShowTitleEnabled(false) // hide 'DankChat' title on toolbar
             onBackPressedDispatcher.addCallback(viewLifecycleOwner, onBackPressedCallback)
 
             var wasKeyboardOpen = false
