@@ -15,6 +15,12 @@
         app:showAsAction="always" />
 
     <item
+        android:id="@+id/menu_toggle_input"
+        android:icon="@drawable/ic_edit"
+        android:title="Toggle input"
+        app:showAsAction="always" />
+
+    <item
         android:id="@+id/menu_add"
         android:icon="@drawable/ic_add_box"
         android:title="@string/add_channel"

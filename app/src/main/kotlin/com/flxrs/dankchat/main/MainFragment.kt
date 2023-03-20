@@ -247,6 +247,11 @@ class MainFragment : Fragment() {
                     menu.findItem(R.id.menu_toggle_notifications).setIcon(
                         if (dankChatPreferences.isNotificationsEnabled) R.drawable.ic_notifications else R.drawable.ic_notifications_off
                     )
+
+                    // Set input toggle icon
+                    menu.findItem(R.id.menu_toggle_input).setIcon(
+                        if (dankChatPreferences.isInputEnabled) R.drawable.ic_edit else R.drawable.ic_edit_off
+                    )
                 }
             }
 
@@ -261,6 +266,7 @@ class MainFragment : Fragment() {
                     R.id.menu_login, R.id.menu_relogin -> openLogin()
                     R.id.menu_logout                   -> showLogoutConfirmationDialog()
                     R.id.menu_toggle_notifications     -> toggleNotifications()
+                    R.id.menu_toggle_input             -> toggleInput()
                     R.id.menu_add                      -> navigateSafe(R.id.action_mainFragment_to_addChannelDialogFragment)
                     R.id.menu_mentions                 -> {
                         closeEmoteMenu()
@@ -895,6 +901,23 @@ class MainFragment : Fragment() {
 
         // Show new toast
         notificationToggleToast = Toast.makeText(context, "Notifications $status", Toast.LENGTH_SHORT)
+        notificationToggleToast?.show()
+    }
+
+    private fun toggleInput() {
+        dankChatPreferences.toggleInput()
+
+        activity?.invalidateOptionsMenu() // force menu reload to show correct icon
+
+        // Cancel previous toast if still visible
+        notificationToggleToast?.cancel()
+
+        var status = "disabled"
+        if (dankChatPreferences.isInputEnabled)
+            status = "enabled"
+
+        // Show new toast
+        notificationToggleToast = Toast.makeText(context, "Input $status", Toast.LENGTH_SHORT)
         notificationToggleToast?.show()
     }
 
