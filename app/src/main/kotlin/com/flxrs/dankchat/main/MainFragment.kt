@@ -916,6 +916,9 @@ class MainFragment : Fragment() {
         if (dankChatPreferences.isInputEnabled)
             status = "enabled"
 
+        // Clear input
+        binding.input.setText("")
+
         // Show new toast
         notificationToggleToast = Toast.makeText(context, "Input $status", Toast.LENGTH_SHORT)
         notificationToggleToast?.show()
