@@ -125,7 +125,7 @@ class MainFragment : Fragment() {
     private val tabSelectionListener = TabSelectionListener()
 
     private val requestImageCapture = registerForActivityResult(StartActivityForResult()) { if (it.resultCode == Activity.RESULT_OK) handleCaptureRequest(imageCapture = true) }
-    private val requestVideoCapture = registerForActivityResult(StartActivityForResult()) { if (it.resultCode == Activity.RESULT_OK) handleCaptureRequest() }
+    private val requestVideoCapture = registerForActivityResult(StartActivityForResult()) { if (it.resultCode == Activity.RESULT_OK) handleCaptureRequest(imageCapture = false) }
     private val requestGalleryMedia = registerForActivityResult(PickVisualMedia()) { uri ->
         uri ?: return@registerForActivityResult
         val contentResolver = activity?.contentResolver ?: return@registerForActivityResult
@@ -145,7 +145,7 @@ class MainFragment : Fragment() {
                 copy.removeExifAttributes()
             }
 
-            mainViewModel.uploadMedia(copy)
+            mainViewModel.uploadMedia(copy, imageCapture = false)
         } catch (t: Throwable) {
             copy.delete()
             showSnackBar(getString(R.string.snackbar_upload_failed))
@@ -423,10 +423,10 @@ class MainFragment : Fragment() {
                 }
             }
         }
-        navBackStackEntry.getLifecycle().addObserver(observer)
+        navBackStackEntry.lifecycle.addObserver(observer)
         viewLifecycleOwner.lifecycle.addObserver(LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_DESTROY) {
-                navBackStackEntry.getLifecycle().removeObserver(observer)
+                navBackStackEntry.lifecycle.removeObserver(observer)
             }
         })
 
@@ -675,7 +675,7 @@ class MainFragment : Fragment() {
             is ImageUploadState.Failed                         -> showSnackBar(
                 message = result.errorMessage?.let { getString(R.string.snackbar_upload_failed_cause, it) } ?: getString(R.string.snackbar_upload_failed),
                 onDismiss = { result.mediaFile.delete() },
-                action = getString(R.string.snackbar_retry) to { mainViewModel.uploadMedia(result.mediaFile) })
+                action = getString(R.string.snackbar_retry) to { mainViewModel.uploadMedia(result.mediaFile, result.imageCapture) })
 
             is ImageUploadState.Finished                       -> {
                 val clipboard = getSystemService(requireContext(), ClipboardManager::class.java)
@@ -725,20 +725,14 @@ class MainFragment : Fragment() {
         }
     }
 
-    private fun handleCaptureRequest(imageCapture: Boolean = false) {
+    private fun handleCaptureRequest(imageCapture: Boolean) {
         if (currentMediaUri == Uri.EMPTY) return
         var mediaFile: File? = null
 
         try {
             mediaFile = currentMediaUri.toFile()
             currentMediaUri = Uri.EMPTY
-
-            // only remove exif data if an image was selected
-            if (imageCapture) {
-                mediaFile.removeExifAttributes()
-            }
-
-            mainViewModel.uploadMedia(mediaFile)
+            mainViewModel.uploadMedia(mediaFile, imageCapture)
         } catch (e: IOException) {
             currentMediaUri = Uri.EMPTY
             mediaFile?.delete()
