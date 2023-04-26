@@ -11,9 +11,9 @@ import android.text.SpannableStringBuilder
 import android.text.method.LinkMovementMethod
 import android.text.util.Linkify
 import android.view.*
+import android.view.ViewGroup.MarginLayoutParams
 import android.view.inputmethod.EditorInfo
 import android.webkit.MimeTypeMap
-import android.widget.FrameLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
@@ -21,6 +21,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult
+import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
@@ -30,12 +31,15 @@ import androidx.core.content.edit
 import androidx.core.net.toFile
 import androidx.core.net.toUri
 import androidx.core.view.*
+import androidx.core.view.WindowInsetsCompat.Type
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.FragmentContainerView
 import androidx.fragment.app.activityViewModels
 import androidx.fragment.app.commit
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
 import androidx.navigation.fragment.findNavController
 import androidx.preference.PreferenceManager
@@ -45,7 +49,15 @@ import com.flxrs.dankchat.DankChatViewModel
 import com.flxrs.dankchat.R
 import com.flxrs.dankchat.ValidationResult
 import com.flxrs.dankchat.chat.ChatTabAdapter
-import com.flxrs.dankchat.chat.menu.EmoteMenuFragment
+import com.flxrs.dankchat.chat.FullScreenSheetState
+import com.flxrs.dankchat.chat.InputSheetState
+import com.flxrs.dankchat.chat.emote.EmoteSheetResult
+import com.flxrs.dankchat.chat.emotemenu.EmoteMenuFragment
+import com.flxrs.dankchat.chat.mention.MentionFragment
+import com.flxrs.dankchat.chat.message.MessageSheetResult
+import com.flxrs.dankchat.chat.message.MoreActionsMessageSheetResult
+import com.flxrs.dankchat.chat.replies.RepliesFragment
+import com.flxrs.dankchat.chat.replies.ReplyInputSheetFragment
 import com.flxrs.dankchat.chat.suggestion.SpaceTokenizer
 import com.flxrs.dankchat.chat.suggestion.Suggestion
 import com.flxrs.dankchat.chat.suggestion.SuggestionsArrayAdapter
@@ -54,15 +66,16 @@ import com.flxrs.dankchat.data.*
 import com.flxrs.dankchat.data.state.DataLoadingState
 import com.flxrs.dankchat.data.state.ImageUploadState
 import com.flxrs.dankchat.data.twitch.badge.Badge
-import com.flxrs.dankchat.data.twitch.chat.ConnectionState
-import com.flxrs.dankchat.data.twitch.emote.GenericEmote
-import com.flxrs.dankchat.data.twitch.message.WhisperMessage
+import com.flxrs.dankchat.data.twitch.emote.ChatMessageEmote
 import com.flxrs.dankchat.databinding.EditDialogBinding
 import com.flxrs.dankchat.databinding.MainFragmentBinding
 import com.flxrs.dankchat.preferences.ChannelWithRename
 import com.flxrs.dankchat.preferences.DankChatPreferenceStore
 import com.flxrs.dankchat.utils.createMediaFile
 import com.flxrs.dankchat.utils.extensions.*
+import com.flxrs.dankchat.utils.insets.ControlFocusInsetsAnimationCallback
+import com.flxrs.dankchat.utils.insets.RootViewDeferringInsetsCallback
+import com.flxrs.dankchat.utils.insets.TranslateDeferringInsetsAnimationCallback
 import com.flxrs.dankchat.utils.removeExifAttributes
 import com.flxrs.dankchat.utils.showErrorDialog
 import com.google.android.material.bottomsheet.BottomSheetBehavior
@@ -73,6 +86,7 @@ import com.google.android.material.snackbar.BaseTransientBottomBar.BaseCallback
 import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.tabs.TabLayoutMediator
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 import java.io.File
 import java.io.IOException
 import java.net.URL
@@ -89,14 +103,14 @@ class MainFragment : Fragment() {
     private var bindingRef: MainFragmentBinding? = null
     private val binding get() = bindingRef!!
 
-    private var emoteMenuBottomSheetBehavior: BottomSheetBehavior<FrameLayout>? = null
-    private var mentionBottomSheetBehavior: BottomSheetBehavior<View>? = null
+    private var inputBottomSheetBehavior: BottomSheetBehavior<FragmentContainerView>? = null
+    private var fullscreenBottomSheetBehavior: BottomSheetBehavior<FragmentContainerView>? = null
     private val onBackPressedCallback = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() {
             when {
-                mainViewModel.isEmoteSheetOpen                -> closeEmoteMenu()
-                mentionBottomSheetBehavior?.isVisible == true -> mentionBottomSheetBehavior?.hide()
-                mainViewModel.isFullscreen                    -> mainViewModel.toggleFullscreen()
+                inputBottomSheetBehavior?.isVisible == true      -> inputBottomSheetBehavior?.hide()
+                fullscreenBottomSheetBehavior?.isVisible == true -> fullscreenBottomSheetBehavior?.hide()
+                mainViewModel.isFullscreen                       -> mainViewModel.toggleFullscreen()
             }
         }
     }
@@ -108,7 +122,7 @@ class MainFragment : Fragment() {
         }
 
         override fun onPageScrollStateChanged(state: Int) {
-            closeEmoteMenu()
+            inputBottomSheetBehavior?.hide()
             binding.input.dismissDropDown()
         }
     }
@@ -160,16 +174,14 @@ class MainFragment : Fragment() {
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         tabAdapter = ChatTabAdapter(parentFragment = this)
         bindingRef = MainFragmentBinding.inflate(inflater, container, false).apply {
-            emoteMenuBottomSheetBehavior = BottomSheetBehavior.from(bottomSheetFrame).apply {
-                addBottomSheetCallback(emoteMenuCallBack)
+            inputBottomSheetBehavior = BottomSheetBehavior.from(inputSheetFragment).apply {
+                addBottomSheetCallback(inputSheetCallback)
                 skipCollapsed = true
             }
             chatViewpager.setup()
             input.setup(this)
 
-            childFragmentManager.findFragmentById(R.id.mention_fragment)?.let {
-                mentionBottomSheetBehavior = BottomSheetBehavior.from(it.requireView()).apply { setupMentionSheet() }
-            }
+            fullscreenBottomSheetBehavior = BottomSheetBehavior.from(fullScreenSheetFragment).apply { setupFullScreenSheet() }
 
             tabLayoutMediator = TabLayoutMediator(tabs, chatViewpager) { tab, position ->
                 tab.text = tabAdapter.getFormattedChannel(position)
@@ -268,11 +280,7 @@ class MainFragment : Fragment() {
                     R.id.menu_toggle_notifications     -> toggleNotifications()
                     R.id.menu_toggle_input             -> toggleInput()
                     R.id.menu_add                      -> navigateSafe(R.id.action_mainFragment_to_addChannelDialogFragment)
-                    R.id.menu_mentions                 -> {
-                        closeEmoteMenu()
-                        mentionBottomSheetBehavior?.expand()
-                    }
-
+                    R.id.menu_mentions                 -> openMentionSheet()
                     R.id.menu_open_channel             -> openChannel()
                     R.id.menu_remove_channel           -> removeChannel()
                     R.id.menu_report_channel           -> reportChannel()
@@ -312,11 +320,12 @@ class MainFragment : Fragment() {
                     }
                 }
             }
-            collectFlow(connectionState) { state ->
+            collectFlow(inputState) { state ->
                 binding.inputLayout.hint = when (state) {
-                    ConnectionState.CONNECTED               -> getString(R.string.hint_connected)
-                    ConnectionState.CONNECTED_NOT_LOGGED_IN -> getString(R.string.hint_not_logged_int)
-                    ConnectionState.DISCONNECTED            -> getString(R.string.hint_disconnected)
+                    InputState.Default      -> getString(R.string.hint_connected)
+                    InputState.Replying     -> getString(R.string.hint_replying)
+                    InputState.NotLoggedIn  -> getString(R.string.hint_not_logged_int)
+                    InputState.Disconnected -> getString(R.string.hint_disconnected)
                 }
             }
             collectFlow(bottomTextState) { (enabled, text) ->
@@ -386,12 +395,12 @@ class MainFragment : Fragment() {
             collectFlow(dankChatViewModel.validationResult) {
                 when (it) {
                     // wait for username to be validated before showing snackbar
-                    is ValidationResult.User             -> showSnackBar(getString(R.string.snackbar_login, it.username))
+                    is ValidationResult.User             -> showSnackBar(getString(R.string.snackbar_login, it.username), onDismiss = ::openChangelogSheetIfNecessary)
                     is ValidationResult.IncompleteScopes -> MaterialAlertDialogBuilder(requireContext())
                         .setTitle(R.string.login_outdated_title)
                         .setMessage(R.string.login_outdated_message)
                         .setPositiveButton(R.string.oauth_expired_login_again) { _, _ -> openLogin() }
-                        .setNegativeButton(R.string.dialog_dismiss) { _, _ -> }
+                        .setNegativeButton(R.string.dialog_dismiss) { _, _ -> openChangelogSheetIfNecessary() }
                         .create().show()
 
                     ValidationResult.TokenInvalid        -> {
@@ -399,11 +408,11 @@ class MainFragment : Fragment() {
                             .setTitle(R.string.oauth_expired_title)
                             .setMessage(R.string.oauth_expired_message)
                             .setPositiveButton(R.string.oauth_expired_login_again) { _, _ -> openLogin() }
-                            .setNegativeButton(R.string.dialog_dismiss) { _, _ -> } // default action is dismissing anyway
+                            .setNegativeButton(R.string.dialog_dismiss) { _, _ -> openChangelogSheetIfNecessary() } // default action is dismissing anyway
                             .create().show()
                     }
 
-                    ValidationResult.Failure             -> showSnackBar(getString(R.string.oauth_verify_failed))
+                    ValidationResult.Failure             -> showSnackBar(getString(R.string.oauth_verify_failed), onDismiss = ::openChangelogSheetIfNecessary)
                 }
             }
         }
@@ -414,12 +423,15 @@ class MainFragment : Fragment() {
             if (event != Lifecycle.Event.ON_RESUME) return@LifecycleEventObserver
             handle.keys().forEach { key ->
                 when (key) {
-                    LOGIN_REQUEST_KEY       -> handle.withData(key, ::handleLoginRequest)
-                    ADD_CHANNEL_REQUEST_KEY -> handle.withData(key, ::addChannel)
-                    HISTORY_DISCLAIMER_KEY  -> handle.withData(key, ::handleMessageHistoryDisclaimerResult)
-                    USER_POPUP_RESULT_KEY   -> handle.withData(key, ::handleUserPopupResult)
-                    LOGOUT_REQUEST_KEY      -> handle.withData<Boolean>(key) { showLogoutConfirmationDialog() }
-                    CHANNELS_REQUEST_KEY    -> handle.withData<Array<ChannelWithRename>>(key) { updateChannels(it.toList()) }
+                    LOGIN_REQUEST_KEY             -> handle.withData(key, ::handleLoginRequest)
+                    ADD_CHANNEL_REQUEST_KEY       -> handle.withData(key, ::addChannel)
+                    HISTORY_DISCLAIMER_KEY        -> handle.withData(key, ::handleMessageHistoryDisclaimerResult)
+                    USER_POPUP_RESULT_KEY         -> handle.withData(key, ::handleUserPopupResult)
+                    MESSAGE_SHEET_RESULT_KEY      -> handle.withData(key, ::handleMessageSheetResult)
+                    COPY_MESSAGE_SHEET_RESULT_KEY -> handle.withData(key, ::handleCopyMessageSheetResult)
+                    EMOTE_SHEET_RESULT_KEY        -> handle.withData(key, ::handleEmoteSheetResult)
+                    LOGOUT_REQUEST_KEY            -> handle.withData<Boolean>(key) { showLogoutConfirmationDialog() }
+                    CHANNELS_REQUEST_KEY          -> handle.withData<Array<ChannelWithRename>>(key) { updateChannels(it.toList()) }
                 }
             }
         }
@@ -434,7 +446,7 @@ class MainFragment : Fragment() {
             dankChatPreferences.userIdString = "${dankChatPreferences.userId}".toUserId()
         }
 
-        val channels = dankChatPreferences.getChannels()
+        val channels = dankChatPreferences.channels
         val withRenames = dankChatPreferences.getChannelsWithRenames(channels)
         tabAdapter.updateFragments(withRenames)
         @SuppressLint("WrongConstant")
@@ -446,36 +458,40 @@ class MainFragment : Fragment() {
             supportActionBar?.setDisplayShowTitleEnabled(false) // hide 'DankChat' title on toolbar
             onBackPressedDispatcher.addCallback(viewLifecycleOwner, onBackPressedCallback)
 
-            var wasKeyboardOpen = false
-            ViewCompat.setOnApplyWindowInsetsListener(binding.root) { _, insets ->
-                val isKeyboardVisible = insets.isVisible(WindowInsetsCompat.Type.ime())
-                if (wasKeyboardOpen == isKeyboardVisible) {
-                    return@setOnApplyWindowInsetsListener insets
-                }
-
-                wasKeyboardOpen = isKeyboardVisible
-                if (binding.input.isFocused && !isKeyboardVisible) {
-                    binding.input.clearFocus()
-                }
-
-                insets
-            }
             ViewCompat.setOnApplyWindowInsetsListener(binding.showChips) { v, insets ->
-                val needsExtraMargin = binding.streamWebviewWrapper.isVisible || isLandscape || !mainViewModel.isFullscreenFlow.value
+                // additional margin for chips because of display cutouts/punch holes
+                val needsExtraMargin = binding.streamWebviewWrapper.isVisible || isLandscape || !mainViewModel.isFullscreen
                 val extraMargin = when {
                     needsExtraMargin -> 0
-                    else             -> insets.getInsets(WindowInsetsCompat.Type.displayCutout()).top
+                    else             -> insets.getInsets(Type.displayCutout()).top
                 }
-
                 v.updateLayoutParams<ConstraintLayout.LayoutParams> {
                     topMargin = 8.px + extraMargin
                 }
+
                 WindowInsetsCompat.CONSUMED
             }
-            ViewCompat.setOnApplyWindowInsetsListener(binding.inputLayout) { v, insets ->
-                v.updatePadding(bottom = insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom)
-                WindowInsetsCompat.CONSUMED
-            }
+
+            val deferringInsetsListener = RootViewDeferringInsetsCallback(
+                persistentInsetTypes = Type.systemBars() or Type.displayCutout(),
+                deferredInsetTypes = Type.ime(),
+                ignorePersistentInsetTypes = { mainViewModel.isFullscreen }
+            )
+            ViewCompat.setWindowInsetsAnimationCallback(binding.root, deferringInsetsListener)
+            ViewCompat.setOnApplyWindowInsetsListener(binding.root, deferringInsetsListener)
+            ViewCompat.setWindowInsetsAnimationCallback(
+                binding.inputLayout,
+                TranslateDeferringInsetsAnimationCallback(
+                    view = binding.inputLayout,
+                    persistentInsetTypes = Type.systemBars(),
+                    deferredInsetTypes = Type.ime(),
+                    dispatchMode = WindowInsetsAnimationCompat.Callback.DISPATCH_MODE_CONTINUE_ON_SUBTREE
+                )
+            )
+            ViewCompat.setWindowInsetsAnimationCallback(
+                binding.input,
+                ControlFocusInsetsAnimationCallback(binding.input)
+            )
 
             if (savedInstanceState == null && !mainViewModel.started) {
                 mainViewModel.started = true // TODO ???
@@ -496,7 +512,6 @@ class MainFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        closeEmoteMenu()
         changeActionBarVisibility(mainViewModel.isFullscreenFlow.value)
 
         (activity as? MainActivity)?.apply {
@@ -520,10 +535,11 @@ class MainFragment : Fragment() {
     override fun onDestroyView() {
         binding.tabs.removeOnTabSelectedListener(tabSelectionListener)
         binding.chatViewpager.unregisterOnPageChangeCallback(pageChangeCallback)
-        emoteMenuBottomSheetBehavior?.removeBottomSheetCallback(emoteMenuCallBack)
+        inputBottomSheetBehavior?.removeBottomSheetCallback(inputSheetCallback)
+        fullscreenBottomSheetBehavior?.removeBottomSheetCallback(fullScreenSheetCallback)
         tabLayoutMediator.detach()
-        emoteMenuBottomSheetBehavior = null
-        mentionBottomSheetBehavior = null
+        inputBottomSheetBehavior = null
+        fullscreenBottomSheetBehavior = null
         binding.chatViewpager.adapter = null
         bindingRef = null
         if (::preferences.isInitialized) {
@@ -536,7 +552,6 @@ class MainFragment : Fragment() {
         targetUserId: UserId,
         targetUserName: UserName,
         targetDisplayName: DisplayName,
-        messageId: String,
         channel: UserName?,
         badges: List<Badge>,
         isWhisperPopup: Boolean = false
@@ -545,7 +560,6 @@ class MainFragment : Fragment() {
             targetUserId = targetUserId,
             targetUserName = targetUserName,
             targetDisplayName = targetDisplayName,
-            messageId = messageId,
             channel = channel,
             isWhisperPopup = isWhisperPopup,
             badges = badges.toTypedArray(),
@@ -566,13 +580,22 @@ class MainFragment : Fragment() {
                             requireActivity().onBackPressedDispatcher.onBackPressed()
                         }
                     }
-                }
-                else {
+                } else {
                     Toast.makeText(getContext(), "Press again to exit", Toast.LENGTH_SHORT).show()
                 }
                 backButtonTime = System.currentTimeMillis()
             }
         })
+    }
+
+    fun openMessageSheet(messageId: String, channel: UserName?, fullMessage: String, canReply: Boolean, canModerate: Boolean) {
+        val directions = MainFragmentDirections.actionMainFragmentToMessageSheetFragment(messageId, channel, fullMessage, canReply, canModerate)
+        navigateSafe(directions)
+    }
+
+    fun openEmoteSheet(emotes: List<ChatMessageEmote>) {
+        val directions = MainFragmentDirections.actionMainFragmentToEmoteSheetFragment(emotes.toTypedArray())
+        navigateSafe(directions)
     }
 
     fun mentionUser(user: UserName, display: DisplayName) {
@@ -582,17 +605,124 @@ class MainFragment : Fragment() {
     }
 
     fun whisperUser(user: UserName) {
-        if (!binding.input.isEnabled) return
+        openMentionSheet(openWhisperTab = true)
 
         val current = binding.input.text.toString()
-        val text = "/w $user $current"
+        val command = "/w $user"
+        if (current.startsWith(command)) {
+            return
+        }
 
+        val text = "$command $current"
         binding.input.setText(text)
         binding.input.setSelection(text.length)
     }
 
-    fun insertText(text: String) {
-        if (!binding.input.isEnabled) return
+    fun openReplies(replyMessageId: String) {
+        inputBottomSheetBehavior?.hide()
+        val fragment = RepliesFragment.newInstance(replyMessageId)
+        childFragmentManager.commit {
+            replace(R.id.full_screen_sheet_fragment, fragment)
+        }
+        childFragmentManager.executePendingTransactions()
+        fullscreenBottomSheetBehavior?.expand()
+    }
+
+    fun insertEmote(code: String, id: String) {
+        insertText("$code ")
+        mainViewModel.addEmoteUsage(id)
+    }
+
+    private fun openChangelogSheetIfNecessary() {
+        if (dankChatPreferences.shouldShowChangelog()) {
+            navigateSafe(R.id.action_mainFragment_to_changelogSheetFragment)
+        }
+    }
+
+    private fun openMentionSheet(openWhisperTab: Boolean = false) {
+        when {
+            openWhisperTab && mainViewModel.isWhisperTabOpen -> return
+            openWhisperTab && mainViewModel.isMentionTabOpen -> {
+                val fragment = childFragmentManager.fragments.filterIsInstance<MentionFragment>().firstOrNull()
+                if (fragment == null) {
+                    createAndOpenMentionSheet(openWhisperTab = true)
+                    return
+                }
+
+                mainViewModel.setFullScreenSheetState(FullScreenSheetState.Whisper)
+                fragment.scrollToWhisperTab()
+            }
+
+            else                                             -> createAndOpenMentionSheet(openWhisperTab)
+        }
+    }
+
+    private fun createAndOpenMentionSheet(openWhisperTab: Boolean = false) {
+        inputBottomSheetBehavior?.hide()
+        lifecycleScope.launch {
+            fullscreenBottomSheetBehavior?.awaitState(BottomSheetBehavior.STATE_HIDDEN)
+            val fragment = MentionFragment.newInstance(openWhisperTab)
+            childFragmentManager.commit {
+                replace(R.id.full_screen_sheet_fragment, fragment)
+            }
+            childFragmentManager.executePendingTransactions()
+            fullscreenBottomSheetBehavior?.expand()
+        }
+    }
+
+    private fun handleMessageSheetResult(result: MessageSheetResult) = when (result) {
+        is MessageSheetResult.OpenMoreActions -> openMoreActionsMessageSheet(result.messageId, result.fullMessage)
+        is MessageSheetResult.Copy            -> copyAndShowSnackBar(result.message, R.string.snackbar_message_copied)
+        is MessageSheetResult.Reply           -> startReply(result.replyMessageId, result.replyName)
+        is MessageSheetResult.ViewThread      -> openReplies(result.replyMessageId)
+    }
+
+    private fun openMoreActionsMessageSheet(messageId: String, fullMessage: String) {
+        val directions = MainFragmentDirections.actionMainFragmentToMoreActionsMessageSheetFragment(messageId, fullMessage)
+        navigateSafe(directions)
+    }
+
+    private fun handleCopyMessageSheetResult(result: MoreActionsMessageSheetResult) = when (result) {
+        is MoreActionsMessageSheetResult.Copy   -> copyAndShowSnackBar(result.message, R.string.snackbar_message_copied)
+        is MoreActionsMessageSheetResult.CopyId -> copyAndShowSnackBar(result.id, R.string.snackbar_message_id_copied)
+    }
+
+    private fun handleEmoteSheetResult(result: EmoteSheetResult) = when (result) {
+        is EmoteSheetResult.Copy -> copyAndShowSnackBar(result.emoteName, R.string.emote_copied)
+        is EmoteSheetResult.Use  -> insertEmote(result.emoteName, result.id)
+    }
+
+    private fun copyAndShowSnackBar(value: String, @StringRes snackBarLabel: Int) {
+        getSystemService(requireContext(), ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText(CLIPBOARD_LABEL_MESSAGE, value))
+        showSnackBar(
+            message = getString(snackBarLabel),
+            action = getString(R.string.snackbar_paste) to {
+                val preparedMessage = value
+                    .withoutInvisibleChar
+                    .withTrailingSpace
+                insertText(preparedMessage)
+            }
+        )
+    }
+
+    private fun startReply(replyMessageId: String, replyName: UserName) {
+        val fragment = ReplyInputSheetFragment.newInstance(replyMessageId, replyName)
+        childFragmentManager.commit {
+            replace(R.id.input_sheet_fragment, fragment)
+        }
+        childFragmentManager.executePendingTransactions()
+        inputBottomSheetBehavior?.expand()
+        binding.root.post {
+            binding.chatViewpager.updateLayoutParams<MarginLayoutParams> {
+                bottomMargin = binding.inputSheetFragment.height
+            }
+        }
+    }
+
+    private fun insertText(text: String) {
+        if (!dankChatPreferences.isLoggedIn) {
+            return
+        }
 
         val current = binding.input.text.toString()
         val index = binding.input.selectionStart.takeIf { it >= 0 } ?: current.length
@@ -602,13 +732,6 @@ class MainFragment : Fragment() {
         binding.input.setSelection(index + text.length)
     }
 
-    fun insertEmote(emote: GenericEmote) {
-        insertText("${emote.code} ")
-        mainViewModel.addEmoteUsage(emote)
-    }
-
-    fun showEmoteMenu() = emoteMenuBottomSheetBehavior?.expand()
-
     private fun openLogin() {
         val directions = MainFragmentDirections.actionMainFragmentToLoginFragment()
         navigateSafe(directions)
@@ -616,15 +739,27 @@ class MainFragment : Fragment() {
     }
 
     private fun handleMessageHistoryDisclaimerResult(result: Boolean) {
+        dankChatPreferences.setCurrentInstalledVersionCode()
         dankChatPreferences.hasMessageHistoryAcknowledged = true
         preferences.edit { putBoolean(getString(R.string.preference_load_message_history_key), result) }
         mainViewModel.loadData()
     }
 
-    private fun handleUserPopupResult(result: UserPopupResult) = when (result) {
-        is UserPopupResult.Error   -> binding.root.showShortSnackbar(getString(R.string.user_popup_error, result.throwable?.message.orEmpty()))
-        is UserPopupResult.Mention -> mentionUser(result.targetUser, result.targetDisplayName)
-        is UserPopupResult.Whisper -> whisperUser(result.targetUser)
+    private fun handleUserPopupResult(result: UserPopupResult) {
+        when (result) {
+            is UserPopupResult.Error   -> showSnackBar(getString(R.string.user_popup_error, result.throwable?.message.orEmpty()))
+            is UserPopupResult.Mention -> {
+                lifecycleScope.launch {
+                    if (mainViewModel.isMentionTabOpen) {
+                        mainViewModel.setFullScreenSheetState(FullScreenSheetState.Closed)
+                        fullscreenBottomSheetBehavior?.awaitState(BottomSheetBehavior.STATE_HIDDEN)
+                    }
+                    mentionUser(result.targetUser, result.targetDisplayName)
+                }
+            }
+
+            is UserPopupResult.Whisper -> whisperUser(result.targetUser)
+        }
     }
 
     private fun addChannel(channel: String) {
@@ -634,7 +769,7 @@ class MainFragment : Fragment() {
             val updatedChannels = mainViewModel.joinChannel(lowerCaseChannel)
             newTabIndex = updatedChannels.lastIndex
             mainViewModel.loadData(channelList = listOf(lowerCaseChannel))
-            dankChatPreferences.channelsString = updatedChannels.joinToString(separator = ",")
+            dankChatPreferences.channels = updatedChannels
 
             tabAdapter.addFragment(lowerCaseChannel)
         }
@@ -648,6 +783,10 @@ class MainFragment : Fragment() {
         val msg = binding.input.text?.toString().orEmpty()
         mainViewModel.trySendMessageOrCommand(msg)
         binding.input.setText("")
+
+        if (mainViewModel.isReplySheetOpen) {
+            inputBottomSheetBehavior?.hide()
+        }
 
         return true
     }
@@ -718,10 +857,10 @@ class MainFragment : Fragment() {
         val name = dankChatPreferences.userName
         if (success && name != null) {
             mainViewModel.closeAndReconnect()
-            showSnackBar(getString(R.string.snackbar_login, name))
+            showSnackBar(getString(R.string.snackbar_login, name), onDismiss = ::openChangelogSheetIfNecessary)
         } else {
             dankChatPreferences.clearLogin()
-            showSnackBar(getString(R.string.snackbar_login_failed))
+            showSnackBar(getString(R.string.snackbar_login_failed), onDismiss = ::openChangelogSheetIfNecessary)
         }
     }
 
@@ -952,15 +1091,13 @@ class MainFragment : Fragment() {
 
     private fun removeChannel() {
         val activeChannel = mainViewModel.getActiveChannel() ?: return
-        val channels = mainViewModel.getChannels().ifEmpty { return }
         MaterialAlertDialogBuilder(requireContext())
             .setTitle(R.string.confirm_channel_removal_title)
             // should give user more info that it's gonna delete the currently active channel (unlike when clicking delete from manage channels list, where is very obvious)
             .setMessage(getString(R.string.confirm_channel_removal_message_named, activeChannel))
             .setPositiveButton(R.string.confirm_channel_removal_positive_button) { _, _ ->
-                dankChatPreferences.removeChannelRename(activeChannel)
-                val updatedChannels = channels - activeChannel
-                val withRenames = dankChatPreferences.getChannelsWithRenames(updatedChannels)
+                dankChatPreferences.removeChannel(activeChannel)
+                val withRenames = dankChatPreferences.getChannelsWithRenames()
                 updateChannels(withRenames)
             }
             .setNegativeButton(R.string.dialog_cancel) { _, _ -> }
@@ -1025,7 +1162,7 @@ class MainFragment : Fragment() {
         val updatedChannels = updatedChannelsWithRenames.map(ChannelWithRename::channel)
         val oldChannels = mainViewModel.getChannels()
         val oldIndex = binding.chatViewpager.currentItem
-        val oldActiveChannel = oldChannels[oldIndex]
+        val oldActiveChannel = oldChannels.getOrNull(oldIndex)
 
         val index = updatedChannelsWithRenames
             .indexOfFirst { it.channel == oldActiveChannel }
@@ -1035,10 +1172,6 @@ class MainFragment : Fragment() {
         tabAdapter.updateFragments(updatedChannelsWithRenames)
         mainViewModel.updateChannels(updatedChannels)
         mainViewModel.setActiveChannel(activeChannel)
-
-        dankChatPreferences.channelsString = updatedChannels
-            .takeIf { it.isNotEmpty() }
-            ?.joinToString(separator = ",")
 
         binding.chatViewpager.setCurrentItem(index, false)
         binding.root.postDelayed(TAB_SCROLL_DELAY_MS) {
@@ -1076,21 +1209,9 @@ class MainFragment : Fragment() {
         }
     }
 
-    private fun BottomSheetBehavior<View>.setupMentionSheet() {
+    private fun BottomSheetBehavior<FragmentContainerView>.setupFullScreenSheet() {
+        addBottomSheetCallback(fullScreenSheetCallback)
         hide()
-        addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
-            override fun onSlide(bottomSheet: View, slideOffset: Float) = Unit
-            override fun onStateChanged(bottomSheet: View, newState: Int) {
-                mainViewModel.setMentionSheetOpen(mentionBottomSheetBehavior?.isMoving == true || mentionBottomSheetBehavior?.isVisible == true)
-                when {
-                    mentionBottomSheetBehavior?.isExpanded == true -> mainViewModel.setSuggestionChannel(WhisperMessage.WHISPER_CHANNEL)
-                    mentionBottomSheetBehavior?.isHidden == true   -> {
-                        val channel = tabAdapter[binding.tabs.selectedTabPosition] ?: return
-                        mainViewModel.setSuggestionChannel(channel)
-                    }
-                }
-            }
-        })
     }
 
     private fun ViewPager2.setup() {
@@ -1127,7 +1248,7 @@ class MainFragment : Fragment() {
         setStartIconDrawable(R.drawable.ic_insert_emoticon)
         setStartIconOnClickListener {
             if (mainViewModel.isEmoteSheetOpen) {
-                closeEmoteMenu()
+                closeInputSheetAndSetState()
                 return@setStartIconOnClickListener
             }
 
@@ -1137,33 +1258,51 @@ class MainFragment : Fragment() {
             }
 
             childFragmentManager.commit {
-                replace(R.id.bottom_sheet_frame, EmoteMenuFragment())
+                replace(R.id.input_sheet_fragment, EmoteMenuFragment())
+            }
+            childFragmentManager.executePendingTransactions()
+            inputBottomSheetBehavior?.expand()
+        }
+    }
+
+    private fun closeInputSheetAndSetState() {
+        val previousState = mainViewModel.closeInputSheet()
+        lifecycleScope.launch {
+            inputBottomSheetBehavior?.awaitState(BottomSheetBehavior.STATE_HIDDEN)
+            if (previousState is InputSheetState.Replying) {
+                startReply(previousState.replyMessageId, previousState.replyName)
             }
         }
     }
 
-    private fun closeEmoteMenu() {
-        val behavior = emoteMenuBottomSheetBehavior ?: return
-        if (!mainViewModel.isEmoteSheetOpen) {
-            return
-        }
+    private val fullScreenSheetCallback = object : BottomSheetBehavior.BottomSheetCallback() {
+        override fun onSlide(bottomSheet: View, slideOffset: Float) = Unit
+        override fun onStateChanged(bottomSheet: View, newState: Int) {
+            val behavior = fullscreenBottomSheetBehavior ?: return
+            when {
+                behavior.isHidden    -> {
+                    mainViewModel.setFullScreenSheetState(FullScreenSheetState.Closed)
+                    val channel = tabAdapter[binding.tabs.selectedTabPosition] ?: return
+                    mainViewModel.setSuggestionChannel(channel)
 
-        mainViewModel.setEmoteSheetOpen(false)
-        behavior.hide()
-        val existing = childFragmentManager.fragments.find { it is EmoteMenuFragment } ?: return
-        childFragmentManager.commit {
-            remove(existing)
+                    val existing = childFragmentManager.fragments.filter { it is MentionFragment || it is RepliesFragment }
+                    childFragmentManager.commit {
+                        existing.forEach(::remove)
+                    }
+                    childFragmentManager.executePendingTransactions()
+                }
+
+                behavior.isCollapsed -> behavior.hide()
+            }
         }
     }
 
-    private val emoteMenuCallBack = object : BottomSheetBehavior.BottomSheetCallback() {
+    private val inputSheetCallback = object : BottomSheetBehavior.BottomSheetCallback() {
         override fun onSlide(bottomSheet: View, slideOffset: Float) = Unit
 
         override fun onStateChanged(bottomSheet: View, newState: Int) {
-            val behavior = emoteMenuBottomSheetBehavior ?: return
-            mainViewModel.setEmoteSheetOpen(behavior.isMoving || behavior.isVisible)
-            binding.streamWebviewWrapper.isVisible = newState == BottomSheetBehavior.STATE_HIDDEN && mainViewModel.isStreamActive
-            if (!mainViewModel.isFullscreenFlow.value && isLandscape) {
+            val behavior = inputBottomSheetBehavior ?: return
+            if (!mainViewModel.isFullscreenFlow.value && isLandscape && mainViewModel.isEmoteSheetOpen) {
                 when (newState) {
                     BottomSheetBehavior.STATE_EXPANDED, BottomSheetBehavior.STATE_COLLAPSED -> {
                         (activity as? AppCompatActivity)?.supportActionBar?.hide()
@@ -1176,6 +1315,21 @@ class MainFragment : Fragment() {
                     }
                 }
             }
+
+            if (behavior.isHidden) {
+                val previousState = mainViewModel.closeInputSheet()
+                val existing = childFragmentManager.fragments.filter { it is EmoteMenuFragment || it is ReplyInputSheetFragment }
+                childFragmentManager.commit {
+                    existing.forEach(::remove)
+                }
+                childFragmentManager.executePendingTransactions()
+                when (previousState) {
+                    is InputSheetState.Replying -> startReply(previousState.replyMessageId, previousState.replyName)
+                    else                        -> binding.chatViewpager.updateLayoutParams<MarginLayoutParams> { bottomMargin = 0 }
+                }
+            }
+
+            binding.streamWebviewWrapper.isVisible = !mainViewModel.isEmoteSheetOpen && mainViewModel.isStreamActive
         }
     }
 
@@ -1183,7 +1337,7 @@ class MainFragment : Fragment() {
         setTokenizer(SpaceTokenizer())
         suggestionAdapter = SuggestionsArrayAdapter(binding.input.context, dankChatPreferences) { count ->
             dropDownHeight = if (count > 4) {
-                (binding.root.measuredHeight / 2.0).roundToInt()
+                (binding.root.measuredHeight / 2.0).roundToInt() - height
             } else {
                 ViewGroup.LayoutParams.WRAP_CONTENT
             }
@@ -1193,7 +1347,7 @@ class MainFragment : Fragment() {
         setOnItemClickListener { parent, _, position, _ ->
             val suggestion = parent.getItemAtPosition(position)
             if (suggestion is Suggestion.EmoteSuggestion) {
-                mainViewModel.addEmoteUsage(suggestion.emote)
+                mainViewModel.addEmoteUsage(suggestion.emote.id)
             }
         }
 
@@ -1215,39 +1369,23 @@ class MainFragment : Fragment() {
 
         setOnFocusChangeListener { _, hasFocus ->
             val isFullscreen = mainViewModel.isFullscreenFlow.value
+            (activity as? MainActivity)?.setFullScreen(isFullscreen, changeActionBarVisibility = false)
             mainViewModel.setShowChips(!hasFocus)
 
+            if (hasFocus && mainViewModel.isEmoteSheetOpen) {
+                closeInputSheetAndSetState()
+            }
+
             if (isPortrait) {
-                val mentionsView = childFragmentManager.findFragmentById(R.id.mention_fragment)?.view
-                binding.bottomSheetFrame
-                    .takeIf { !mainViewModel.isEmoteSheetOpen }
-                    ?.isInvisible = true
-
-                mentionsView
-                    .takeIf { mentionBottomSheetBehavior?.isVisible == false }
-                    ?.isInvisible = true
-
-                binding.root.post {
-                    (activity as? MainActivity)?.setFullScreen(enabled = !hasFocus && isFullscreen, changeActionBarVisibility = false)
-                    binding.bottomSheetFrame.isInvisible = false
-                    mentionsView?.isInvisible = false
-                }
                 return@setOnFocusChangeListener
             }
 
             binding.tabs.isVisible = !hasFocus && !isFullscreen
             binding.streamWebviewWrapper.isVisible = !hasFocus && !mainViewModel.isEmoteSheetOpen && mainViewModel.isStreamActive
-
             when {
-                hasFocus -> (activity as? MainActivity)?.apply {
-                    supportActionBar?.hide()
-                    setFullScreen(enabled = false, changeActionBarVisibility = false)
-                }
-
-                else     -> (activity as? MainActivity)?.setFullScreen(isFullscreen)
+                hasFocus      -> (activity as? MainActivity)?.supportActionBar?.hide()
+                !isFullscreen -> (activity as? MainActivity)?.supportActionBar?.show()
             }
-
-            binding.root.requestApplyInsets()
         }
     }
 
@@ -1257,6 +1395,7 @@ class MainFragment : Fragment() {
         private const val MAX_GUIDELINE_PERCENT = 0.8f
         private const val MIN_GUIDELINE_PERCENT = 0.2f
         private const val CLIPBOARD_LABEL = "dankchat_media_url"
+        private const val CLIPBOARD_LABEL_MESSAGE = "dankchat_message"
         private const val TAB_SCROLL_DELAY_MS = 1000 / 60 * 10L
         private const val OFFSCREEN_PAGE_LIMIT = 2
 
@@ -1266,5 +1405,8 @@ class MainFragment : Fragment() {
         const val ADD_CHANNEL_REQUEST_KEY = "add_channel_key"
         const val HISTORY_DISCLAIMER_KEY = "history_disclaimer_key"
         const val USER_POPUP_RESULT_KEY = "user_popup_key"
+        const val MESSAGE_SHEET_RESULT_KEY = "message_sheet_key"
+        const val COPY_MESSAGE_SHEET_RESULT_KEY = "copy_message_sheet_key"
+        const val EMOTE_SHEET_RESULT_KEY = "emote_sheet_key"
     }
 }

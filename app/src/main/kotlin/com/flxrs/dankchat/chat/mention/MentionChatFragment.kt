@@ -12,6 +12,7 @@ import com.flxrs.dankchat.data.DisplayName
 import com.flxrs.dankchat.data.UserId
 import com.flxrs.dankchat.data.UserName
 import com.flxrs.dankchat.data.twitch.badge.Badge
+import com.flxrs.dankchat.data.twitch.emote.ChatMessageEmote
 import com.flxrs.dankchat.databinding.ChatFragmentBinding
 import com.flxrs.dankchat.main.MainFragment
 import com.flxrs.dankchat.utils.extensions.collectFlow
@@ -45,7 +46,6 @@ class MentionChatFragment : ChatFragment() {
         targetUserId: UserId?,
         targetUserName: UserName,
         targetDisplayName: DisplayName,
-        messageId: String,
         channel: UserName?,
         badges: List<Badge>,
         isLongPress: Boolean
@@ -55,17 +55,24 @@ class MentionChatFragment : ChatFragment() {
         val shouldMention = (isLongPress && shouldLongClickMention) || (!isLongPress && !shouldLongClickMention)
 
         when {
-            shouldMention -> (parentFragment?.parentFragment as? MainFragment)?.whisperUser(targetUserName)
-            else          -> (parentFragment?.parentFragment as? MainFragment)?.openUserPopup(
+            shouldMention && dankChatPreferenceStore.isLoggedIn -> (parentFragment?.parentFragment as? MainFragment)?.whisperUser(targetUserName)
+            else                                                -> (parentFragment?.parentFragment as? MainFragment)?.openUserPopup(
                 targetUserId = targetUserId,
                 targetUserName = targetUserName,
                 targetDisplayName = targetDisplayName,
-                messageId = messageId,
                 channel = null,
                 badges = badges,
                 isWhisperPopup = true
             )
         }
+    }
+
+    override fun onMessageClick(messageId: String, channel: UserName?, fullMessage: String) {
+        (parentFragment?.parentFragment as? MainFragment)?.openMessageSheet(messageId, channel, fullMessage, canReply = false, canModerate = false)
+    }
+
+    override fun onEmoteClick(emotes: List<ChatMessageEmote>) {
+        (parentFragment?.parentFragment as? MainFragment)?.openEmoteSheet(emotes)
     }
 
     companion object {

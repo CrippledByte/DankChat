@@ -4,8 +4,12 @@ data class Highlight(
     val type: HighlightType,
     val customColor: Int? = null
 ) {
-    val isMention = type == HighlightType.Username || type == HighlightType.Custom
+    val isMention = type in MENTION_TYPES
     val shouldNotify = type == HighlightType.Notification
+
+    companion object {
+        private val MENTION_TYPES = listOf(HighlightType.Username, HighlightType.Custom, HighlightType.Reply)
+    }
 }
 
 fun Collection<Highlight>.hasMention(): Boolean = any(Highlight::isMention)
@@ -20,6 +24,7 @@ enum class HighlightType(val priority: HighlightPriority) {
     ElevatedMessage(HighlightPriority.MEDIUM),
     Username(HighlightPriority.LOW),
     Custom(HighlightPriority.LOW),
+    Reply(HighlightPriority.LOW),
     Notification(HighlightPriority.LOW),
 }
 

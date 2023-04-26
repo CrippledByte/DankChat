@@ -147,24 +147,20 @@
                     app:layout_constraintTop_toBottomOf="@id/add_channels_text" />
             </androidx.constraintlayout.widget.ConstraintLayout>
 
-            <FrameLayout
-                android:id="@+id/bottom_sheet_frame"
+            <androidx.fragment.app.FragmentContainerView
+                android:id="@+id/full_screen_sheet_fragment"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                app:behavior_hideable="true"
+                app:behavior_skipCollapsed="true"
+                app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior" />
+
+            <androidx.fragment.app.FragmentContainerView
+                android:id="@+id/input_sheet_fragment"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 app:behavior_hideable="true"
                 app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior" />
-
-            <fragment
-                android:id="@+id/mention_fragment"
-                android:name="com.flxrs.dankchat.chat.mention.MentionFragment"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                app:behavior_hideable="true"
-                app:behavior_peekHeight="0dp"
-                app:behavior_skipCollapsed="true"
-                app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior"
-                tools:layout="@layout/chat_fragment"
-                tools:ignore="FragmentTagUsage" />
         </androidx.coordinatorlayout.widget.CoordinatorLayout>
 
         <androidx.constraintlayout.widget.Barrier

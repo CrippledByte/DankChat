@@ -24,6 +24,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.core.text.*
 import androidx.core.text.util.LinkifyCompat
+import androidx.core.view.isVisible
 import androidx.emoji2.text.EmojiCompat
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
@@ -52,8 +53,10 @@ class ChatAdapter(
     private val emoteRepository: EmoteRepository,
     private val dankChatPreferenceStore: DankChatPreferenceStore,
     private val onListChanged: (position: Int) -> Unit,
-    private val onUserClick: (targetUserId: UserId?, targetUsername: UserName, targetDisplayName: DisplayName, messageId: String, channelName: UserName?, badges: List<Badge>, isLongPress: Boolean) -> Unit,
-    private val onMessageLongClick: (message: String) -> Unit
+    private val onUserClick: (targetUserId: UserId?, targetUsername: UserName, targetDisplayName: DisplayName, channelName: UserName?, badges: List<Badge>, isLongPress: Boolean) -> Unit,
+    private val onMessageLongClick: (messageId: String, channel: UserName?, fullMessage: String) -> Unit,
+    private val onReplyClick: (messageId: String) -> Unit,
+    private val onEmoteClick: (emotes: List<ChatMessageEmote>) -> Unit,
 ) : ListAdapter<ChatItem, ChatAdapter.ViewHolder>(DetectDiff()) {
     // Using position.isEven for determining which background to use in checkered mode doesn't work,
     // since the LayoutManager uses stackFromEnd and every new message will be even. Instead, keep count of new messages separately.
@@ -99,6 +102,8 @@ class ChatAdapter(
     @SuppressLint("ClickableViewAccessibility")
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val item = getItem(position)
+        holder.binding.replyGroup.isVisible = false
+        holder.binding.itemLayout.setBackgroundColor(Color.TRANSPARENT)
         holder.binding.itemText.alpha = when (item.importance) {
             ChatImportance.SYSTEM  -> .75f
             ChatImportance.DELETED -> .5f
@@ -109,7 +114,21 @@ class ChatAdapter(
             is SystemMessage          -> holder.binding.itemText.handleSystemMessage(message, holder)
             is NoticeMessage          -> holder.binding.itemText.handleNoticeMessage(message, holder)
             is UserNoticeMessage      -> holder.binding.itemText.handleUserNoticeMessage(message, holder)
-            is PrivMessage            -> holder.binding.itemText.handlePrivMessage(message, holder, item.isMentionTab)
+            is PrivMessage            -> with(holder.binding) {
+                if (message.thread != null && !item.isInReplies) {
+                    replyGroup.isVisible = true
+                    val formatted = buildString {
+                        append(itemReply.context.getString(R.string.reply_to))
+                        append(" @${message.thread.name}: ")
+                        append(message.thread.message)
+                    }
+                    itemReply.text = formatted
+                    itemReply.setOnClickListener { onReplyClick(message.thread.id) }
+                }
+
+                itemText.handlePrivMessage(message, holder, item.isMentionTab)
+            }
+
             is ModerationMessage      -> holder.binding.itemText.handleModerationMessage(message, holder)
             is PointRedemptionMessage -> holder.binding.itemText.handlePointRedemptionMessage(message, holder)
             is WhisperMessage         -> holder.binding.itemText.handleWhisperMessage(message, holder)
@@ -133,7 +152,9 @@ class ChatAdapter(
 
             else                                                                    -> ContextCompat.getColor(context, android.R.color.transparent)
         }
+        holder.binding.itemLayout.setBackgroundColor(background)
         setBackgroundColor(background)
+
         val withTime = when {
             dankChatPreferenceStore.showTimestamps -> SpannableStringBuilder()
                 .timestampFont(context) { append(DateTimeUtils.timestampToLocalTime(message.timestamp)) }
@@ -160,7 +181,9 @@ class ChatAdapter(
 
             else                                                                    -> ContextCompat.getColor(context, android.R.color.transparent)
         }
+        holder.binding.itemLayout.setBackgroundColor(background)
         setBackgroundColor(background)
+
         val withTime = when {
             dankChatPreferenceStore.showTimestamps -> SpannableStringBuilder()
                 .timestampFont(context) { append(DateTimeUtils.timestampToLocalTime(message.timestamp)) }
@@ -184,6 +207,7 @@ class ChatAdapter(
 
             else                                                                    -> ContextCompat.getColor(context, android.R.color.transparent)
         }
+        holder.binding.itemLayout.setBackgroundColor(background)
         setRippleBackground(background, enableRipple = false)
 
         val systemMessageText = when (message.type) {
@@ -227,6 +251,8 @@ class ChatAdapter(
 
             else                                                                    -> ContextCompat.getColor(context, android.R.color.transparent)
         }
+
+        holder.binding.itemLayout.setBackgroundColor(background)
         setRippleBackground(background, enableRipple = false)
 
         val systemMessage = message.getSystemMessage(dankChatPreferenceStore.userName, dankChatPreferenceStore.showTimedOutMessages)
@@ -244,6 +270,7 @@ class ChatAdapter(
 
     private fun TextView.handlePointRedemptionMessage(message: PointRedemptionMessage, holder: ViewHolder) {
         val background = ContextCompat.getColor(context, R.color.color_redemption_highlight)
+        holder.binding.itemLayout.setBackgroundColor(background)
         setRippleBackground(background, enableRipple = false)
 
         setTextSize(TypedValue.COMPLEX_UNIT_SP, dankChatPreferenceStore.fontSize)
@@ -302,6 +329,7 @@ class ChatAdapter(
 
             else                                                                    -> ContextCompat.getColor(context, android.R.color.transparent)
         }
+        holder.binding.itemLayout.setBackgroundColor(background)
         setRippleBackground(background, enableRipple = true)
 
         val allowedBadges = badges.filter { it.type in dankChatPreferenceStore.visibleBadgeTypes }
@@ -315,7 +343,7 @@ class ChatAdapter(
         val nameGroupLength = senderAliasOrFormattedName.length + 4 + recipientAliasOrFormattedName.length + 2
         val prefixLength = spannable.length + nameGroupLength
         val badgePositions = allowedBadges.map {
-            spannable.append("  ")
+            spannable.append("⠀ ")
             spannable.length - 2 to spannable.length - 1
         }
 
@@ -329,8 +357,8 @@ class ChatAdapter(
         spannable.append(message)
 
         val userClickableSpan = object : LongClickableSpan() {
-            override fun onClick(v: View) = onUserClick(userId, name, displayName, id, null, badges, false)
-            override fun onLongClick(view: View) = onUserClick(userId, name, displayName, id, null, badges, true)
+            override fun onClick(v: View) = onUserClick(userId, name, displayName, null, badges, false)
+            override fun onLongClick(view: View) = onUserClick(userId, name, displayName, null, badges, true)
             override fun updateDrawState(ds: TextPaint) {
                 ds.isUnderlineText = false
                 ds.color = senderColor
@@ -348,18 +376,22 @@ class ChatAdapter(
             else                             -> spannable
         } as SpannableStringBuilder
 
-        addLinks(spannableWithEmojis, originalMessage)
+        val onWhisperMessageClick = {
+            onMessageLongClick(id, null, spannableWithEmojis.toString().replace("⠀ ", ""))
+        }
+
+        addLinks(spannableWithEmojis, onWhisperMessageClick)
 
         // copying message
         val messageClickableSpan = object : LongClickableSpan() {
             override fun onClick(v: View) = Unit
-            override fun onLongClick(view: View) = onMessageLongClick(originalMessage)
+            override fun onLongClick(view: View) = onWhisperMessageClick()
             override fun updateDrawState(ds: TextPaint) {
                 ds.isUnderlineText = false
             }
 
         }
-        spannableWithEmojis[messageStart..messageEnd] = messageClickableSpan
+        spannableWithEmojis[0..spannableWithEmojis.length] = messageClickableSpan
         setText(spannableWithEmojis, TextView.BufferType.SPANNABLE)
 
         // todo extract common badges + emote handling
@@ -406,6 +438,9 @@ class ChatAdapter(
                 }
             }
 
+            // Remove message clickable span because emote spans have to be set before we add the span covering the full message
+            (text as Spannable).removeSpan(messageClickableSpan)
+
             val fullPrefix = prefixLength + badgesLength
             try {
                 emotes
@@ -419,7 +454,7 @@ class ChatAdapter(
                                 hasAnimatedEmoteOrBadge = true
                                 animatable.setRunning(animateGifs)
                             }
-                            (text as Spannable).setEmoteSpans(emotes.first(), fullPrefix, layerDrawable)
+                            (text as Spannable).setEmoteSpans(emotes, fullPrefix, layerDrawable, onWhisperMessageClick)
                         }
                     }
             } catch (t: Throwable) {
@@ -429,6 +464,8 @@ class ChatAdapter(
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P && animateGifs && hasAnimatedEmoteOrBadge) {
                 emoteRepository.gifCallback.addView(holder.binding.itemText)
             }
+
+            (text as Spannable)[0..text.length] = messageClickableSpan
         }
     }
 
@@ -455,6 +492,7 @@ class ChatAdapter(
 
             else                                                                    -> ContextCompat.getColor(context, android.R.color.transparent)
         }
+        holder.binding.itemLayout.setBackgroundColor(bgColor)
         setRippleBackground(bgColor, enableRipple = true)
 
         val textColor = MaterialColors.getColor(textView, R.attr.colorOnSurface)
@@ -508,8 +546,8 @@ class ChatAdapter(
         // clicking usernames
         if (aliasOrFormattedName.isNotBlank()) {
             val userClickableSpan = object : LongClickableSpan() {
-                override fun onClick(v: View) = onUserClick(userId, name, displayName, id, channel, badges, false)
-                override fun onLongClick(view: View) = onUserClick(userId, name, displayName, id, channel, badges, true)
+                override fun onClick(v: View) = onUserClick(userId, name, displayName, channel, badges, false)
+                override fun onLongClick(view: View) = onUserClick(userId, name, displayName, channel, badges, true)
                 override fun updateDrawState(ds: TextPaint) {
                     ds.isUnderlineText = false
                     ds.color = nameColor
@@ -528,17 +566,27 @@ class ChatAdapter(
             else                             -> messageBuilder
         } as SpannableStringBuilder
 
-        addLinks(spannableWithEmojis, originalMessage)
+        val onMessageClick = {
+            onMessageLongClick(id, channel, spannableWithEmojis.toString().replace("⠀ ", ""))
+        }
+
+        addLinks(spannableWithEmojis, onMessageClick)
+        if (thread != null) {
+            holder.binding.itemReply.setOnLongClickListener {
+                onMessageClick()
+                true
+            }
+        }
 
         // copying message
         val messageClickableSpan = object : LongClickableSpan() {
             override fun onClick(v: View) = Unit
-            override fun onLongClick(view: View) = onMessageLongClick(originalMessage)
+            override fun onLongClick(view: View) = onMessageClick()
             override fun updateDrawState(ds: TextPaint) {
                 ds.isUnderlineText = false
             }
         }
-        spannableWithEmojis[messageStart..messageEnd] = messageClickableSpan
+        spannableWithEmojis[0..spannableWithEmojis.length] = messageClickableSpan
         setText(spannableWithEmojis, TextView.BufferType.SPANNABLE)
 
         val animateGifs = dankChatPreferenceStore.animateGifs
@@ -584,6 +632,9 @@ class ChatAdapter(
                 }
             }
 
+            // Remove message clickable span because emote spans have to be set before we add the span covering the full message
+            (text as Spannable).removeSpan(messageClickableSpan)
+
             val fullPrefix = prefixLength + badgesLength
             try {
                 emotes
@@ -597,7 +648,7 @@ class ChatAdapter(
                                 hasAnimatedEmoteOrBadge = true
                                 animatable.setRunning(animateGifs)
                             }
-                            (text as Spannable).setEmoteSpans(emotes.first(), fullPrefix, layerDrawable)
+                            (text as Spannable).setEmoteSpans(emotes, fullPrefix, layerDrawable, onMessageClick)
                         }
                     }
             } catch (t: Throwable) {
@@ -607,6 +658,8 @@ class ChatAdapter(
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P && animateGifs && hasAnimatedEmoteOrBadge) {
                 emoteRepository.gifCallback.addView(holder.binding.itemText)
             }
+
+            (text as Spannable)[0..text.length] = messageClickableSpan
         }
     }
 
@@ -647,13 +700,19 @@ class ChatAdapter(
         forEachIndexed { idx, dr -> dr.transformEmoteDrawable(scaleFactor, emotes[idx], maxWidth, maxHeight) }
     }
 
-    private fun Spannable.setEmoteSpans(e: ChatMessageEmote, prefix: Int, drawable: Drawable) {
+    private fun Spannable.setEmoteSpans(emotes: List<ChatMessageEmote>, prefix: Int, drawable: Drawable, onLongClick: () -> Unit) {
         try {
-            val start = e.position.first + prefix
-            val end = e.position.last + prefix
+            val position = emotes.first().position
+            val start = position.first + prefix
+            val end = position.last + prefix
             this[start..end] = ImageSpan(drawable)
+            this[start..end] = object : LongClickableSpan() {
+                override fun onLongClick(view: View) = onLongClick()
+                override fun onClick(widget: View) = onEmoteClick(emotes)
+            }
         } catch (t: Throwable) {
-            Log.e("ViewBinding", "$t $this ${e.position} ${e.code} $length")
+            val firstEmote = emotes.firstOrNull()
+            Log.e("ViewBinding", "$t $this ${firstEmote?.position} ${firstEmote?.code} $length")
         }
     }
 
@@ -694,7 +753,7 @@ class ChatAdapter(
     ).append(" ")
 
     /** set background color, and enable/disable ripple (whether enable or disable should match the "clickability" of that message */
-    private fun TextView.setRippleBackground(@ColorInt backgroundColor: Int, enableRipple: Boolean = false) {
+    private fun View.setRippleBackground(@ColorInt backgroundColor: Int, enableRipple: Boolean = false) {
         val rippleBg = background as? RippleDrawable
         if (rippleBg != null) { // background is expected set to RippleDrawable via XML layout
             rippleBg.setDrawableByLayerId(R.id.ripple_color_layer, ColorDrawable(backgroundColor))
@@ -716,11 +775,12 @@ class ChatAdapter(
             HighlightType.FirstMessage                             -> ContextCompat.getColor(context, R.color.color_first_message_highlight)
             HighlightType.Username                                 -> ContextCompat.getColor(context, R.color.color_mention_highlight)
             HighlightType.Custom                                   -> ContextCompat.getColor(context, R.color.color_mention_highlight)
+            HighlightType.Reply                                    -> ContextCompat.getColor(context, R.color.color_mention_highlight)
             HighlightType.Notification                             -> ContextCompat.getColor(context, R.color.color_mention_highlight)
         }
     }
 
-    private fun TextView.addLinks(spannableWithEmojis: SpannableStringBuilder, originalMessage: String) {
+    private fun TextView.addLinks(spannableWithEmojis: SpannableStringBuilder, onLongClick: () -> Unit) {
         LinkifyCompat.addLinks(spannableWithEmojis, Linkify.WEB_URLS)
         spannableWithEmojis.getSpans<URLSpan>().forEach { urlSpan ->
             val start = spannableWithEmojis.getSpanStart(urlSpan)
@@ -742,7 +802,7 @@ class ChatAdapter(
             }
 
             val clickableSpan = object : LongClickableSpan() {
-                override fun onLongClick(view: View) = onMessageLongClick(originalMessage)
+                override fun onLongClick(view: View) = onLongClick()
                 override fun onClick(v: View) {
                     try {
                         customTabsIntent.launchUrl(context, fixedUrl.toUri())

@@ -3,6 +3,7 @@ package com.flxrs.dankchat.data.api.helix
 import com.flxrs.dankchat.data.UserId
 import com.flxrs.dankchat.data.UserName
 import com.flxrs.dankchat.data.api.helix.dto.AnnouncementRequestDto
+import com.flxrs.dankchat.data.api.helix.dto.BadgeSetDto
 import com.flxrs.dankchat.data.api.helix.dto.BanRequestDto
 import com.flxrs.dankchat.data.api.helix.dto.ChatSettingsDto
 import com.flxrs.dankchat.data.api.helix.dto.ChatSettingsRequestDto
@@ -61,8 +62,8 @@ class HelixApiClient @Inject constructor(private val helixApi: HelixApi, private
     suspend fun getUserIdByName(name: UserName): Result<UserId> = getUserByName(name)
         .mapCatching { it.id }
 
-    suspend fun getUsersFollows(fromId: UserId, toId: UserId): Result<UserFollowsDto> = runCatching {
-        helixApi.getUsersFollows(fromId, toId)
+    suspend fun getChannelFollowers(broadcastUserId: UserId, targetUserId: UserId): Result<UserFollowsDto> = runCatching {
+        helixApi.getChannelFollowers(broadcastUserId, targetUserId)
             .throwHelixApiErrorOnFailure()
             .body()
     }
@@ -199,6 +200,20 @@ class HelixApiClient @Inject constructor(private val helixApi: HelixApi, private
             .first()
     }
 
+    suspend fun getGlobalBadges(): Result<List<BadgeSetDto>> = runCatching {
+        helixApi.getGlobalBadges()
+            .throwHelixApiErrorOnFailure()
+            .body<DataListDto<BadgeSetDto>>()
+            .data
+    }
+
+    suspend fun getChannelBadges(broadcastUserId: UserId): Result<List<BadgeSetDto>> = runCatching {
+        helixApi.getChannelBadges(broadcastUserId)
+            .throwHelixApiErrorOnFailure()
+            .body<DataListDto<BadgeSetDto>>()
+            .data
+    }
+
     private suspend inline fun <reified T> pageUntil(amountToFetch: Int, request: (cursor: String?) -> HttpResponse?): List<T> {
         val initialPage = request(null)
             .throwHelixApiErrorOnFailure()
@@ -288,7 +303,7 @@ class HelixApiClient @Inject constructor(private val helixApi: HelixApi, private
                 else                    -> HelixError.Forwarded
             }
 
-            TOO_EARLY_STATUS                   -> HelixError.Forwarded
+            HttpStatusCode.TooEarly            -> HelixError.Forwarded
             else                               -> HelixError.Unknown
         }
         throw HelixApiException(error, betterStatus, request.url, message)
@@ -296,7 +311,6 @@ class HelixApiClient @Inject constructor(private val helixApi: HelixApi, private
 
     companion object {
         private val TAG = HelixApiClient::class.java.simpleName
-        private val TOO_EARLY_STATUS = HttpStatusCode(425, "Too Early")
         private const val DEFAULT_PAGE_SIZE = 100
         private const val WHISPER_SELF_ERROR = "A user cannot whisper themself"
         private const val MISSING_SCOPE_ERROR = "Missing scope"

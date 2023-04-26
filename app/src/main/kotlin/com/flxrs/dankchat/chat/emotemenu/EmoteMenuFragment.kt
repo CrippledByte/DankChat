@@ -1,4 +1,4 @@
-package com.flxrs.dankchat.chat.menu
+package com.flxrs.dankchat.chat.emotemenu
 
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -17,16 +17,19 @@ import com.google.android.material.tabs.TabLayoutMediator
 class EmoteMenuFragment : Fragment() {
 
     private val mainViewModel: MainViewModel by viewModels({ requireParentFragment() })
+    private var bindingRef: EmoteMenuFragmentBinding? = null
+    private val binding get() = bindingRef!!
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         val adapter = EmoteMenuAdapter {
-            (parentFragment as? MainFragment)?.insertEmote(it)
+            (parentFragment as? MainFragment)?.insertEmote(it.code, it.id)
         }
-        val binding = EmoteMenuFragmentBinding.inflate(inflater, container, false).apply {
+        bindingRef = EmoteMenuFragmentBinding.inflate(inflater, container, false).apply {
             bottomSheetViewPager.adapter = adapter
             bottomSheetViewPager.updateLayoutParams {
                 height = (resources.displayMetrics.heightPixels * HEIGHT_SCALE_FACTOR).toInt()
             }
+
             TabLayoutMediator(bottomSheetTabs, bottomSheetViewPager) { tab, pos ->
                 val menuTab = EmoteMenuTab.values()[pos]
                 tab.text = when (menuTab) {
@@ -39,16 +42,12 @@ class EmoteMenuFragment : Fragment() {
         }
 
         collectFlow(mainViewModel.emoteTabItems, adapter::submitList)
+        mainViewModel.setEmoteInputSheetState()
         return binding.root
     }
 
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-        (parentFragment as? MainFragment)?.showEmoteMenu()
-    }
-
     override fun onDestroyView() {
-        runCatching { Runtime.getRuntime().gc() }
+        bindingRef = null
         super.onDestroyView()
     }
 

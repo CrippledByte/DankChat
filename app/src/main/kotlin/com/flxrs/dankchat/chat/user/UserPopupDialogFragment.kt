@@ -8,14 +8,12 @@ import android.view.ViewGroup
 import androidx.core.net.toUri
 import androidx.core.view.isVisible
 import androidx.fragment.app.viewModels
-import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.navigation.fragment.navArgs
 import androidx.recyclerview.widget.LinearLayoutManager
 import coil.load
 import coil.size.Scale
 import com.flxrs.dankchat.R
-import com.flxrs.dankchat.databinding.TimeoutDialogBinding
 import com.flxrs.dankchat.databinding.UserPopupBottomsheetBinding
 import com.flxrs.dankchat.main.MainFragment
 import com.flxrs.dankchat.utils.extensions.collectFlow
@@ -26,10 +24,10 @@ import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class UserPopupDialogFragment : BottomSheetDialogFragment() {
+
     private val args: UserPopupDialogFragmentArgs by navArgs()
     private val viewModel: UserPopupViewModel by viewModels()
     private var bindingRef: UserPopupBottomsheetBinding? = null
@@ -37,21 +35,11 @@ class UserPopupDialogFragment : BottomSheetDialogFragment() {
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         bindingRef = UserPopupBottomsheetBinding.inflate(inflater, container, false).apply {
-            userMention.text = when {
-                args.isWhisperPopup -> getString(R.string.user_popup_whisper)
-                else                -> getString(R.string.user_popup_mention)
-            }
-
             userMention.setOnClickListener {
-                val result = when {
-                    args.isWhisperPopup -> UserPopupResult.Whisper(viewModel.userName)
-                    else                -> UserPopupResult.Mention(viewModel.userName, viewModel.displayName)
-                }
-
-                findNavController()
-                    .getBackStackEntry(R.id.mainFragment)
-                    .savedStateHandle[MainFragment.USER_POPUP_RESULT_KEY] = result
-                dialog?.dismiss()
+                setResultAndDismiss(UserPopupResult.Mention(viewModel.userName, viewModel.displayName))
+            }
+            userWhisper.setOnClickListener {
+                setResultAndDismiss(UserPopupResult.Whisper(viewModel.userName))
             }
 
             userBlock.setOnClickListener {
@@ -65,15 +53,7 @@ class UserPopupDialogFragment : BottomSheetDialogFragment() {
                         .show()
                 }
             }
-            userTimeout.setOnClickListener { showTimeoutDialog() }
-            userDelete.setOnClickListener { showDeleteDialog() }
-            userBan.setOnClickListener { showBanDialog() }
-            userUnban.setOnClickListener {
-                lifecycleScope.launch {
-                    viewModel.unbanUser()
-                    dialog?.dismiss()
-                }
-            }
+
             userAvatarCard.setOnClickListener {
                 val userName = viewModel.userName
                 val url = "https://twitch.tv/$userName"
@@ -101,23 +81,22 @@ class UserPopupDialogFragment : BottomSheetDialogFragment() {
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-
         collectFlow(viewModel.userPopupState) {
             when (it) {
                 is UserPopupState.Loading     -> binding.showLoadingState(it)
                 is UserPopupState.NotLoggedIn -> binding.showNotLoggedInState(it)
                 is UserPopupState.Success     -> binding.updateUserData(it)
-                is UserPopupState.Error       -> setErrorResultAndDismiss(it.throwable)
+                is UserPopupState.Error       -> setResultAndDismiss(UserPopupResult.Error(it.throwable))
             }
         }
+    }
 
-        collectFlow(viewModel.canShowModeration) {
-            binding.moderationGroup.isVisible = it
-        }
-
+    override fun onResume() {
+        super.onResume()
         dialog?.takeIf { isLandscape }?.let {
             val sheet = it as BottomSheetDialog
             sheet.behavior.state = BottomSheetBehavior.STATE_EXPANDED
+            sheet.behavior.skipCollapsed = true
         }
     }
 
@@ -140,6 +119,7 @@ class UserPopupDialogFragment : BottomSheetDialogFragment() {
         userBlock.isEnabled = true
         userName.text = userState.userName.formatWithDisplayName(userState.displayName)
         userCreated.text = getString(R.string.user_popup_created, userState.created)
+        userFollowage.isVisible = userState.showFollowingSince
         userFollowage.text = userState.followingSince?.let {
             getString(R.string.user_popup_following_since, it)
         } ?: getString(R.string.user_popup_not_following)
@@ -178,65 +158,14 @@ class UserPopupDialogFragment : BottomSheetDialogFragment() {
         userName.text = state.userName.formatWithDisplayName(state.displayName)
 
         userMention.isEnabled = false
+        userWhisper.isEnabled = false
         userBlock.isEnabled = false
     }
 
-    private fun setErrorResultAndDismiss(throwable: Throwable?) {
+    private fun setResultAndDismiss(result: UserPopupResult) {
         findNavController()
             .getBackStackEntry(R.id.mainFragment)
-            .savedStateHandle[MainFragment.USER_POPUP_RESULT_KEY] = UserPopupResult.Error(throwable)
+            .savedStateHandle[MainFragment.USER_POPUP_RESULT_KEY] = result
         dialog?.dismiss()
-    }
-
-    private fun showTimeoutDialog() {
-        var currentItem = 0
-        val choices = resources.getStringArray(R.array.timeout_entries)
-        val dialogContent = TimeoutDialogBinding.inflate(LayoutInflater.from(requireContext()), null, false).apply {
-            timeoutSlider.setLabelFormatter { choices[it.toInt()] }
-            timeoutSlider.addOnChangeListener { _, value, _ ->
-                currentItem = value.toInt()
-                timeoutValue.text = choices[value.toInt()]
-            }
-        }
-
-        MaterialAlertDialogBuilder(requireContext())
-            .setTitle(R.string.confirm_user_timeout_title)
-            .setView(dialogContent.root)
-            .setPositiveButton(R.string.confirm_user_timeout_positive_button) { _, _ ->
-                lifecycleScope.launch {
-                    viewModel.timeoutUser(currentItem)
-                    dialog?.dismiss()
-                }
-            }
-            .setNegativeButton(R.string.dialog_cancel) { d, _ -> d.dismiss() }
-            .show()
-    }
-
-    private fun showBanDialog() {
-        MaterialAlertDialogBuilder(requireContext())
-            .setTitle(R.string.confirm_user_ban_title)
-            .setMessage(R.string.confirm_user_ban_message)
-            .setPositiveButton(R.string.confirm_user_ban_positive_button) { _, _ ->
-                lifecycleScope.launch {
-                    viewModel.banUser()
-                    dialog?.dismiss()
-                }
-            }
-            .setNegativeButton(R.string.dialog_cancel) { d, _ -> d.dismiss() }
-            .show()
-    }
-
-    private fun showDeleteDialog() {
-        MaterialAlertDialogBuilder(requireContext())
-            .setTitle(R.string.confirm_user_delete_title)
-            .setMessage(R.string.confirm_user_delete_message)
-            .setPositiveButton(R.string.confirm_user_delete_positive_button) { _, _ ->
-                lifecycleScope.launch {
-                    viewModel.deleteMessage()
-                    dialog?.dismiss()
-                }
-            }
-            .setNegativeButton(R.string.dialog_cancel) { d, _ -> d.dismiss() }
-            .show()
     }
 }

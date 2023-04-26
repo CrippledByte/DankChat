@@ -31,6 +31,8 @@ data class PrivMessage(
     val timedOut: Boolean = false,
     val tags: Map<String, String>,
     val userDisplay: UserDisplay? = null,
+    val thread: MessageThreadHeader? = null,
+    val replyMentionOffset: Int = 0,
     val isSubscribed: Boolean = false,
     val subscriptionMonths: Int = 0,
     val subscriptionTier: Int? = null,

@@ -11,9 +11,12 @@ import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.activity.addCallback
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.net.toUri
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.navigation.fragment.findNavController
@@ -23,6 +26,8 @@ import com.flxrs.dankchat.main.MainFragment
 import com.flxrs.dankchat.preferences.DankChatPreferenceStore
 import com.flxrs.dankchat.utils.extensions.collectFlow
 import com.flxrs.dankchat.utils.extensions.showLongSnackbar
+import com.flxrs.dankchat.utils.insets.RootViewDeferringInsetsCallback
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -56,11 +61,20 @@ class LoginFragment : Fragment() {
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        val deferringInsetsListener = RootViewDeferringInsetsCallback(
+            persistentInsetTypes = WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout(),
+            deferredInsetTypes = WindowInsetsCompat.Type.ime()
+        )
+        ViewCompat.setWindowInsetsAnimationCallback(binding.root, deferringInsetsListener)
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root, deferringInsetsListener)
+
         (requireActivity() as AppCompatActivity).apply {
-            setSupportActionBar(binding.loginToolbar)
-            supportActionBar?.apply {
-                setDisplayHomeAsUpEnabled(true)
-                title = getString(R.string.login_title)
+            binding.loginToolbar.setNavigationOnClickListener { showCancelLoginDialog() }
+            onBackPressedDispatcher.addCallback(viewLifecycleOwner) {
+                when {
+                    binding.webview.canGoBack() -> binding.webview.goBack()
+                    else                        -> showCancelLoginDialog()
+                }
             }
         }
         collectFlow(loginViewModel.events) { (successful) ->
@@ -77,6 +91,15 @@ class LoginFragment : Fragment() {
     override fun onDestroyView() {
         super.onDestroyView()
         bindingRef = null
+    }
+
+    private fun showCancelLoginDialog() {
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.confirm_login_cancel_title)
+            .setMessage(R.string.confirm_login_cancel_message)
+            .setPositiveButton(R.string.confirm_login_cancel_positive_button) { _, _ -> findNavController().popBackStack() }
+            .setNegativeButton(R.string.dialog_dismiss) { _, _ -> }
+            .create().show()
     }
 
     @Suppress("OVERRIDE_DEPRECATION")

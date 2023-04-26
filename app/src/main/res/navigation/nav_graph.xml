@@ -33,6 +33,18 @@
         <action
             android:id="@+id/action_mainFragment_to_userPopupDialogFragment"
             app:destination="@id/userPopupDialogFragment" />
+        <action
+            android:id="@+id/action_mainFragment_to_messageSheetFragment"
+            app:destination="@id/messageSheetFragment" />
+        <action
+            android:id="@+id/action_mainFragment_to_moreActionsMessageSheetFragment"
+            app:destination="@id/moreActionsMessageSheetFragment" />
+        <action
+            android:id="@+id/action_mainFragment_to_emoteSheetFragment"
+            app:destination="@id/emoteSheetFragment" />
+        <action
+            android:id="@+id/action_mainFragment_to_changelogSheetFragment"
+            app:destination="@id/changelogSheetFragment" />
     </fragment>
     <fragment
         android:id="@+id/chatFragment"
@@ -93,6 +105,9 @@
             app:exitAnim="@anim/close_exit"
             app:popEnterAnim="@anim/open_enter"
             app:popExitAnim="@anim/close_exit" />
+        <action
+            android:id="@+id/action_overviewSettingsFragment_to_changelogSheetFragment"
+            app:destination="@id/changelogSheetFragment" />
     </fragment>
 
     <fragment
@@ -157,9 +172,6 @@
             android:name="targetUserName"
             app:argType="com.flxrs.dankchat.data.UserName" />
         <argument
-            android:name="messageId"
-            app:argType="string" />
-        <argument
             android:name="channel"
             app:argType="com.flxrs.dankchat.data.UserName"
             app:nullable="true" />
@@ -173,4 +185,77 @@
             android:name="targetDisplayName"
             app:argType="com.flxrs.dankchat.data.DisplayName" />
     </dialog>
+    <fragment
+        android:id="@+id/repliesFragment"
+        android:name="com.flxrs.dankchat.chat.replies.RepliesFragment"
+        android:label="RepliesFragment" >
+        <argument
+            android:name="rootMessageId"
+            app:argType="string" />
+    </fragment>
+    <fragment
+        android:id="@+id/repliesInputSheetFragment"
+        android:name="com.flxrs.dankchat.chat.replies.ReplyInputSheetFragment"
+        android:label="RepliesInputSheetFragment" >
+        <argument
+            android:name="replyMessageId"
+            app:argType="string" />
+        <argument
+            android:name="replyUser"
+            app:argType="com.flxrs.dankchat.data.UserName" />
+    </fragment>
+    <dialog
+        android:id="@+id/messageSheetFragment"
+        android:name="com.flxrs.dankchat.chat.message.MessageSheetFragment"
+        android:label="MessageSheetFragment" >
+        <argument
+            android:name="messageId"
+            app:argType="string" />
+        <argument
+            android:name="channel"
+            app:argType="com.flxrs.dankchat.data.UserName"
+            app:nullable="true" />
+        <argument
+            android:name="fullMessage"
+            app:argType="string" />
+        <argument
+            android:name="canReply"
+            app:argType="boolean" />
+        <argument
+            android:name="canModerate"
+            app:argType="boolean" />
+    </dialog>
+
+    <dialog
+        android:id="@+id/moreActionsMessageSheetFragment"
+        android:name="com.flxrs.dankchat.chat.message.MoreActionsMessageSheetFragment"
+        android:label="MoreActionsMessageSheetFragment">
+        <argument
+            android:name="messageId"
+            app:argType="string" />
+        <argument
+            android:name="fullMessage"
+            app:argType="string" />
+    </dialog>
+    <dialog
+        android:id="@+id/emoteSheetFragment"
+        android:name="com.flxrs.dankchat.chat.emote.EmoteSheetFragment"
+        android:label="EmoteSheetFragment" >
+        <argument
+            android:name="emotes"
+            app:argType="com.flxrs.dankchat.data.twitch.emote.ChatMessageEmote[]" />
+    </dialog>
+    <dialog
+        android:id="@+id/changelogSheetFragment"
+        android:name="com.flxrs.dankchat.changelog.ChangelogSheetFragment"
+        android:label="ChangelogSheetFragment" />
+    <fragment
+        android:id="@+id/mentionFragment"
+        android:name="com.flxrs.dankchat.chat.mention.MentionFragment"
+        android:label="MentionFragment" >
+        <argument
+            android:name="openWhisperTab"
+            app:argType="boolean"
+            android:defaultValue="false" />
+    </fragment>
 </navigation>

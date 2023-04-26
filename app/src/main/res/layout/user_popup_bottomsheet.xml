@@ -11,6 +11,8 @@
             android:id="@+id/bottomsheet_handle"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:minHeight="24dp"
+            android:paddingBottom="0dp"
             app:layout_constraintBottom_toTopOf="@id/user_name"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
@@ -57,7 +59,6 @@
                 android:scaleType="fitCenter"
                 tools:srcCompat="@tools:sample/avatars" />
         </com.google.android.material.card.MaterialCardView>
-
 
         <TextView
             android:id="@+id/user_name"
@@ -163,7 +164,6 @@
             android:id="@+id/buttons_layout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginVertical="16dp"
             app:layout_constrainedHeight="true"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
@@ -177,119 +177,52 @@
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/user_mention"
-                    style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="0dp"
+                    style="@style/Widget.App.TextIconButton"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginHorizontal="8dp"
                     android:text="@string/user_popup_mention"
-                    app:layout_constraintBottom_toTopOf="@id/user_block"
+                    app:icon="@drawable/ic_alternate_email"
+                    app:layout_constraintBottom_toTopOf="@id/user_whisper"
                     app:layout_constraintEnd_toEndOf="parent"
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toTopOf="parent" />
 
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/user_block"
-                    style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="0dp"
+                    android:id="@+id/user_whisper"
+                    style="@style/Widget.App.TextIconButton"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginHorizontal="8dp"
-                    android:layout_marginTop="4dp"
-                    android:text="@string/user_popup_block"
-                    app:layout_constraintBottom_toTopOf="@id/user_report"
+                    android:text="@string/user_popup_whisper"
+                    app:icon="@drawable/ic_3p"
+                    app:layout_constraintBottom_toTopOf="@id/user_block"
                     app:layout_constraintEnd_toEndOf="parent"
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/user_mention" />
 
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/user_report"
-                    style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="0dp"
+                    android:id="@+id/user_block"
+                    style="@style/Widget.App.TextIconButton"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginHorizontal="8dp"
-                    android:layout_marginTop="4dp"
-                    android:layout_marginBottom="8dp"
+                    android:text="@string/user_popup_block"
+                    app:icon="@drawable/ic_block"
+                    app:layout_constraintBottom_toTopOf="@id/user_report"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toBottomOf="@id/user_whisper" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/user_report"
+                    style="@style/Widget.App.TextIconButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
                     android:text="@string/user_popup_report"
-                    app:layout_constraintBottom_toTopOf="@id/mod_barrier"
+                    app:icon="@drawable/ic_report"
+                    app:layout_constraintBottom_toBottomOf="parent"
                     app:layout_constraintEnd_toEndOf="parent"
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/user_block" />
-
-                <androidx.constraintlayout.widget.Barrier
-                    android:id="@+id/mod_barrier"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    app:barrierAllowsGoneWidgets="true"
-                    app:barrierDirection="bottom"
-                    app:constraint_referenced_ids="user_report" />
-
-                <androidx.constraintlayout.widget.Group
-                    android:id="@+id/moderation_group"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:visibility="gone"
-                    app:constraint_referenced_ids="user_timeout,user_delete,user_ban,user_unban"
-                    tools:visibility="visible" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/user_timeout"
-                    style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginHorizontal="8dp"
-                    android:layout_marginTop="4dp"
-                    android:text="@string/user_popup_timeout"
-                    app:layout_constraintBottom_toTopOf="@id/user_delete"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toBottomOf="@id/mod_barrier"
-                    app:layout_constraintVertical_bias="0"
-                    app:layout_constraintVertical_chainStyle="packed" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/user_delete"
-                    style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginHorizontal="8dp"
-                    android:layout_marginTop="4dp"
-                    android:text="@string/user_popup_delete"
-                    app:layout_constraintBottom_toTopOf="@id/user_ban"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toBottomOf="@id/user_timeout"
-                    app:layout_constraintVertical_bias="0"
-                    app:layout_constraintVertical_chainStyle="packed" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/user_ban"
-                    style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginHorizontal="8dp"
-                    android:layout_marginTop="4dp"
-                    android:text="@string/user_popup_ban"
-                    app:layout_constraintBottom_toBottomOf="parent"
-                    app:layout_constraintEnd_toStartOf="@id/user_unban"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toBottomOf="@id/user_delete"
-                    app:layout_constraintVertical_bias="0"
-                    app:layout_constraintVertical_chainStyle="packed" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/user_unban"
-                    style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginHorizontal="8dp"
-                    android:layout_marginTop="4dp"
-                    android:layout_marginBottom="8dp"
-                    android:text="@string/user_popup_unban"
-                    app:layout_constraintBottom_toBottomOf="parent"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintStart_toEndOf="@id/user_ban"
-                    app:layout_constraintTop_toBottomOf="@id/user_delete" />
             </androidx.constraintlayout.widget.ConstraintLayout>
         </androidx.core.widget.NestedScrollView>
     </androidx.constraintlayout.widget.ConstraintLayout>
-
 </layout>

@@ -41,13 +41,19 @@ class HelixApi(private val ktorClient: HttpClient, private val dankChatPreferenc
         }
     }
 
-    suspend fun getUserById(userId: UserId): HttpResponse? = getUsersByIds(listOf(userId))
-
-    suspend fun getUsersFollows(fromId: UserId, toId: UserId): HttpResponse? = ktorClient.get("users/follows") {
+    suspend fun getChannelFollowers(broadcasterUserId: UserId, targetUserId: UserId? = null, first: Int? = null, after: String? = null): HttpResponse? = ktorClient.get("channels/followers") {
         val oAuth = dankChatPreferenceStore.oAuthKey?.withoutOAuthPrefix ?: return null
         bearerAuth(oAuth)
-        parameter("from_id", fromId)
-        parameter("to_id", toId)
+        parameter("broadcaster_id", broadcasterUserId)
+        if (targetUserId != null) {
+            parameter("user_id", targetUserId)
+        }
+        if (first != null) {
+            parameter("first", first)
+        }
+        if (after != null) {
+            parameter("after", after)
+        }
     }
 
     suspend fun getStreams(channels: List<UserName>): HttpResponse? = ktorClient.get("streams") {
@@ -214,5 +220,18 @@ class HelixApi(private val ktorClient: HttpClient, private val dankChatPreferenc
         parameter("moderator_id", moderatorUserId)
         contentType(ContentType.Application.Json)
         setBody(request)
+    }
+
+    suspend fun getGlobalBadges(): HttpResponse? = ktorClient.get("chat/badges/global") {
+        val oAuth = dankChatPreferenceStore.oAuthKey?.withoutOAuthPrefix ?: return null
+        bearerAuth(oAuth)
+        contentType(ContentType.Application.Json)
+    }
+
+    suspend fun getChannelBadges(broadcasterUserId: UserId): HttpResponse? = ktorClient.get("chat/badges") {
+        val oAuth = dankChatPreferenceStore.oAuthKey?.withoutOAuthPrefix ?: return null
+        bearerAuth(oAuth)
+        parameter("broadcaster_id", broadcasterUserId)
+        contentType(ContentType.Application.Json)
     }
 }

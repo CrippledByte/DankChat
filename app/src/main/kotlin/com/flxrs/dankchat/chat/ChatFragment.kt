@@ -1,7 +1,5 @@
 package com.flxrs.dankchat.chat
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.SharedPreferences
 import android.graphics.drawable.Animatable
 import android.graphics.drawable.LayerDrawable
@@ -11,7 +9,8 @@ import android.text.style.ImageSpan
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import androidx.core.content.ContextCompat.getSystemService
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
 import androidx.core.view.postDelayed
 import androidx.fragment.app.Fragment
@@ -26,6 +25,7 @@ import com.flxrs.dankchat.data.UserId
 import com.flxrs.dankchat.data.UserName
 import com.flxrs.dankchat.data.repo.emote.EmoteRepository
 import com.flxrs.dankchat.data.twitch.badge.Badge
+import com.flxrs.dankchat.data.twitch.emote.ChatMessageEmote
 import com.flxrs.dankchat.databinding.ChatFragmentBinding
 import com.flxrs.dankchat.main.MainFragment
 import com.flxrs.dankchat.main.MainViewModel
@@ -34,9 +34,7 @@ import com.flxrs.dankchat.utils.extensions.collectFlow
 import com.flxrs.dankchat.utils.extensions.forEachLayer
 import com.flxrs.dankchat.utils.extensions.forEachSpan
 import com.flxrs.dankchat.utils.extensions.forEachViewHolder
-import com.flxrs.dankchat.utils.extensions.showShortSnackbar
-import com.flxrs.dankchat.utils.extensions.withTrailingSpace
-import com.flxrs.dankchat.utils.extensions.withoutInvisibleChar
+import com.flxrs.dankchat.utils.insets.TranslateDeferringInsetsAnimationCallback
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -85,9 +83,19 @@ open class ChatFragment : Fragment() {
             dankChatPreferenceStore = dankChatPreferenceStore,
             onListChanged = ::scrollToPosition,
             onUserClick = ::onUserClick,
-            onMessageLongClick = ::copyMessage
+            onMessageLongClick = ::onMessageClick,
+            onReplyClick = ::onReplyClick,
+            onEmoteClick = ::onEmoteClick,
         ).apply { stateRestorationPolicy = RecyclerView.Adapter.StateRestorationPolicy.PREVENT_WHEN_EMPTY }
         binding.chat.setup(adapter, manager)
+        ViewCompat.setWindowInsetsAnimationCallback(
+            binding.chat,
+            TranslateDeferringInsetsAnimationCallback(
+                view = binding.chat,
+                persistentInsetTypes = WindowInsetsCompat.Type.systemBars(),
+                deferredInsetTypes = WindowInsetsCompat.Type.ime(),
+            )
+        )
 
         preferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { pref, key ->
             context ?: return@OnSharedPreferenceChangeListener
@@ -163,7 +171,6 @@ open class ChatFragment : Fragment() {
         targetUserId: UserId?,
         targetUserName: UserName,
         targetDisplayName: DisplayName,
-        messageId: String,
         channel: UserName?,
         badges: List<Badge>,
         isLongPress: Boolean
@@ -173,12 +180,11 @@ open class ChatFragment : Fragment() {
         val shouldMention = (isLongPress && shouldLongClickMention) || (!isLongPress && !shouldLongClickMention)
 
         when {
-            shouldMention -> (parentFragment as? MainFragment)?.mentionUser(targetUserName, targetDisplayName)
-            else          -> (parentFragment as? MainFragment)?.openUserPopup(
+            shouldMention && dankChatPreferenceStore.isLoggedIn -> (parentFragment as? MainFragment)?.mentionUser(targetUserName, targetDisplayName)
+            else                                                -> (parentFragment as? MainFragment)?.openUserPopup(
                 targetUserId = targetUserId,
                 targetUserName = targetUserName,
                 targetDisplayName = targetDisplayName,
-                messageId = messageId,
                 channel = channel,
                 badges = badges,
                 isWhisperPopup = false
@@ -186,16 +192,16 @@ open class ChatFragment : Fragment() {
         }
     }
 
-    private fun copyMessage(message: String) {
-        getSystemService(requireContext(), ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText(CLIPBOARD_MESSAGE_LABEL, message))
-        binding.root.showShortSnackbar(getString(R.string.snackbar_message_copied)) {
-            setAction(R.string.snackbar_paste) {
-                val preparedMessage = message
-                    .withoutInvisibleChar
-                    .withTrailingSpace
-                (parentFragment as? MainFragment)?.insertText(preparedMessage)
-            }
-        }
+    protected open fun onMessageClick(messageId: String, channel: UserName?, fullMessage: String) {
+        (parentFragment as? MainFragment)?.openMessageSheet(messageId, channel, fullMessage, canReply = true, canModerate = true)
+    }
+
+    protected open fun onEmoteClick(emotes: List<ChatMessageEmote>) {
+        (parentFragment as? MainFragment)?.openEmoteSheet(emotes)
+    }
+
+    private fun onReplyClick(rootMessageId: String) {
+        (parentFragment as? MainFragment)?.openReplies(rootMessageId)
     }
 
     protected open fun scrollToPosition(position: Int) {
@@ -231,7 +237,7 @@ open class ChatFragment : Fragment() {
     }
 
     private fun RecyclerView.cleanupActiveDrawables(itemCount: Int) =
-        forEachViewHolder<ChatAdapter.ViewHolder>(itemCount) { holder ->
+        forEachViewHolder<ChatAdapter.ViewHolder>(itemCount) { _, holder ->
             holder.binding.itemText.forEachSpan<ImageSpan> { imageSpan ->
                 (imageSpan.drawable as? LayerDrawable)?.forEachLayer(Animatable::stop)
             }
@@ -239,7 +245,6 @@ open class ChatFragment : Fragment() {
 
     companion object {
         private const val AT_BOTTOM_STATE = "chat_at_bottom_state"
-        private const val CLIPBOARD_MESSAGE_LABEL = "dankchat_message"
         private const val MAX_MESSAGES_REDRAW_AMOUNT = 50
         private const val MESSAGES_REDRAW_DELAY_MS = 100L
         private const val OFFSCREEN_VIEW_CACHE_SIZE = 10

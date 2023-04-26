@@ -5,6 +5,7 @@ import android.graphics.drawable.LayerDrawable
 import android.os.Build
 import android.util.LruCache
 import androidx.annotation.VisibleForTesting
+import com.flxrs.dankchat.data.DisplayName
 import com.flxrs.dankchat.data.UserId
 import com.flxrs.dankchat.data.UserName
 import com.flxrs.dankchat.data.api.bttv.dto.BTTVChannelDto
@@ -23,8 +24,10 @@ import com.flxrs.dankchat.data.twitch.badge.Badge
 import com.flxrs.dankchat.data.twitch.badge.BadgeSet
 import com.flxrs.dankchat.data.twitch.badge.BadgeType
 import com.flxrs.dankchat.data.twitch.emote.ChatMessageEmote
+import com.flxrs.dankchat.data.twitch.emote.ChatMessageEmoteType
 import com.flxrs.dankchat.data.twitch.emote.EmoteType
 import com.flxrs.dankchat.data.twitch.emote.GenericEmote
+import com.flxrs.dankchat.data.twitch.emote.toChatMessageEmoteType
 import com.flxrs.dankchat.data.twitch.message.EmoteWithPositions
 import com.flxrs.dankchat.data.twitch.message.Message
 import com.flxrs.dankchat.data.twitch.message.PrivMessage
@@ -93,6 +96,7 @@ class EmoteRepository @Inject constructor(
     }
 
     fun parseEmotesAndBadges(message: Message): Message {
+        val replyMentionOffset = (message as? PrivMessage)?.replyMentionOffset ?: 0
         val emoteData = message.emoteData ?: return message
         val (messageString, channel, emotesWithPositions) = emoteData
 
@@ -103,7 +107,7 @@ class EmoteRepository @Inject constructor(
         val (duplicateSpaceAdjustedMessage, removedSpaces) = withEmojiFix.removeDuplicateWhitespace()
         val (appendedSpaceAdjustedMessage, appendedSpaces) = duplicateSpaceAdjustedMessage.appendSpacesBetweenEmojiGroup()
 
-        val twitchEmotes = parseTwitchEmotes(emotesWithPositions, appendedSpaceAdjustedMessage, appendedSpaces, removedSpaces)
+        val twitchEmotes = parseTwitchEmotes(emotesWithPositions, appendedSpaceAdjustedMessage, appendedSpaces, removedSpaces, replyMentionOffset)
         val thirdPartyEmotes = parse3rdPartyEmotes(appendedSpaceAdjustedMessage, channel).filterNot { e -> twitchEmotes.any { it.code == e.code } }
         val emotes = (twitchEmotes + thirdPartyEmotes)
 
@@ -299,8 +303,8 @@ class EmoteRepository @Inject constructor(
         }
     }
 
-    suspend fun setBTTVEmotes(channel: UserName, bttvResult: BTTVChannelDto) = withContext(Dispatchers.Default) {
-        val bttvEmotes = (bttvResult.emotes + bttvResult.sharedEmotes).map { parseBTTVEmote(it) }
+    suspend fun setBTTVEmotes(channel: UserName, channelDisplayName: DisplayName, bttvResult: BTTVChannelDto) = withContext(Dispatchers.Default) {
+        val bttvEmotes = (bttvResult.emotes + bttvResult.sharedEmotes).map { parseBTTVEmote(it, channelDisplayName) }
         emotes[channel]?.update {
             it.copy(bttvChannelEmotes = bttvEmotes)
         }
@@ -320,7 +324,9 @@ class EmoteRepository @Inject constructor(
 
         val sevenTvEmotes = sevenTvResult
             .filterUnlistedIfEnabled()
-            .mapNotNull { parseSevenTVEmote(it, EmoteType.ChannelSevenTVEmote) }
+            .mapNotNull { emote ->
+                parseSevenTVEmote(emote, EmoteType.ChannelSevenTVEmote(emote.data?.owner?.displayName, emote.data?.baseName?.takeIf { emote.name != it }))
+            }
 
         emotes[channel]?.update {
             it.copy(sevenTvChannelEmotes = sevenTvEmotes)
@@ -333,7 +339,7 @@ class EmoteRepository @Inject constructor(
         val sevenTvGlobalEmotes = sevenTvResult
             .filterUnlistedIfEnabled()
             .mapNotNull { emote ->
-                parseSevenTVEmote(emote, EmoteType.GlobalSevenTVEmote)
+                parseSevenTVEmote(emote, EmoteType.GlobalSevenTVEmote(emote.data?.owner?.displayName, emote.data?.baseName?.takeIf { emote.name != it }))
             }
 
         emotes.values.forEach { flow ->
@@ -370,7 +376,7 @@ class EmoteRepository @Inject constructor(
     @VisibleForTesting
     fun adjustOverlayEmotes(message: String, emotes: List<ChatMessageEmote>): Pair<String, List<ChatMessageEmote>> {
         var adjustedMessage = message
-        val adjustedEmotes = emotes.sortedBy { it.position.first }
+        val adjustedEmotes = emotes.sortedBy { it.position.first }.toMutableList()
 
         for (i in adjustedEmotes.lastIndex downTo 0) {
             val emote = adjustedEmotes[i]
@@ -400,8 +406,7 @@ class EmoteRepository @Inject constructor(
                         adjustedMessage.length -> adjustedMessage.substring(0, emote.position.first)
                         else                   -> adjustedMessage.removeRange(emote.position)
                     }
-                    // TODO
-                    emote.position = previousEmote.position
+                    adjustedEmotes[i] = emote.copy(position = previousEmote.position)
                     foundEmote = true
 
                     break
@@ -417,7 +422,7 @@ class EmoteRepository @Inject constructor(
 
                         val first = nextEmote.position.first - emote.code.length - 1
                         val last = nextEmote.position.last - emote.code.length - 1
-                        nextEmote.position = first..last
+                        adjustedEmotes[k] = nextEmote.copy(position = first..last)
                     }
                 }
             }
@@ -437,6 +442,7 @@ class EmoteRepository @Inject constructor(
                         id = emote.id,
                         code = emote.code,
                         scale = emote.scale,
+                        type = emote.emoteType.toChatMessageEmoteType() ?: ChatMessageEmoteType.TwitchEmote,
                         isOverlayEmote = emote.isOverlayEmote
                     )
                 }
@@ -445,7 +451,13 @@ class EmoteRepository @Inject constructor(
         }
     }
 
-    private fun parseTwitchEmotes(emotesWithPositions: List<EmoteWithPositions>, message: String, appendedSpaces: List<Int>, removedSpaces: List<Int>): List<ChatMessageEmote> {
+    private fun parseTwitchEmotes(
+        emotesWithPositions: List<EmoteWithPositions>,
+        message: String,
+        appendedSpaces: List<Int>,
+        removedSpaces: List<Int>,
+        replyMentionOffset: Int,
+    ): List<ChatMessageEmote> {
         // Characters with supplementary codepoints have two chars and need to be considered into emote positioning
         val supplementaryCodePointPositions = message.supplementaryCodePointPositions
         return emotesWithPositions.flatMap { (id, positions) ->
@@ -453,8 +465,8 @@ class EmoteRepository @Inject constructor(
                 val removedSpaceExtra = removedSpaces.count { it < range.first }
                 val unicodeExtra = supplementaryCodePointPositions.count { it < range.first - removedSpaceExtra }
                 val spaceExtra = appendedSpaces.count { it < range.first + unicodeExtra }
-                val fixedStart = range.first + unicodeExtra + spaceExtra - removedSpaceExtra
-                val fixedEnd = range.last + unicodeExtra + spaceExtra - removedSpaceExtra
+                val fixedStart = range.first + unicodeExtra + spaceExtra - removedSpaceExtra - replyMentionOffset
+                val fixedEnd = range.last + unicodeExtra + spaceExtra - removedSpaceExtra - replyMentionOffset
 
                 // be extra safe in case twitch sends invalid emote ranges :)
                 val fixedPos = fixedStart.coerceAtLeast(minimumValue = 0)..(fixedEnd + 1).coerceAtMost(message.length)
@@ -465,13 +477,14 @@ class EmoteRepository @Inject constructor(
                     id = id,
                     code = code,
                     scale = 1,
+                    type = ChatMessageEmoteType.TwitchEmote,
                     isTwitch = true
                 )
             }
         }
     }
 
-    private fun parseBTTVEmote(emote: BTTVEmoteDto): GenericEmote {
+    private fun parseBTTVEmote(emote: BTTVEmoteDto, channelDisplayName: DisplayName): GenericEmote {
         val name = emote.code
         val id = emote.id
         val url = BTTV_EMOTE_TEMPLATE.format(id, BTTV_EMOTE_SIZE)
@@ -482,7 +495,7 @@ class EmoteRepository @Inject constructor(
             lowResUrl = lowResUrl,
             id = id,
             scale = 1,
-            emoteType = EmoteType.ChannelBTTVEmote,
+            emoteType = EmoteType.ChannelBTTVEmote(emote.user?.displayName ?: channelDisplayName, isShared = emote.user != null),
             isOverlayEmote = name in OVERLAY_EMOTES,
         )
     }
@@ -506,16 +519,20 @@ class EmoteRepository @Inject constructor(
     private fun parseFFZEmote(emote: FFZEmoteDto, channel: UserName?): GenericEmote? {
         val name = emote.name
         val id = emote.id
+        val urlMap = emote.animated
+            ?.mapValues { (_, url) -> url.takeIf { SUPPORTS_WEBP } ?: "$url.gif" }
+            ?: emote.urls
+
         val (scale, url) = when {
-            emote.urls["4"] != null -> 1 to emote.urls.getValue("4")
-            emote.urls["2"] != null -> 2 to emote.urls.getValue("2")
-            else                    -> 4 to emote.urls["1"]
+            urlMap["4"] != null -> 1 to urlMap.getValue("4")
+            urlMap["2"] != null -> 2 to urlMap.getValue("2")
+            else                -> 4 to urlMap["1"]
         }
         url ?: return null
-        val lowResUrl = emote.urls["2"] ?: emote.urls["1"] ?: return null
+        val lowResUrl = urlMap["2"] ?: urlMap["1"] ?: return null
         val type = when (channel) {
-            null -> EmoteType.GlobalFFZEmote
-            else -> EmoteType.ChannelFFZEmote
+            null -> EmoteType.GlobalFFZEmote(emote.owner?.displayName)
+            else -> EmoteType.ChannelFFZEmote(emote.owner?.displayName)
         }
         return GenericEmote(name, url.withLeadingHttps, lowResUrl.withLeadingHttps, "$id", scale, type)
     }
@@ -547,8 +564,8 @@ class EmoteRepository @Inject constructor(
 
     private fun SevenTVEmoteFileDto.emoteUrlWithFallback(base: String, size: String, animated: Boolean): String {
         return when {
-            animated && Build.VERSION.SDK_INT < Build.VERSION_CODES.P -> "$base$size.gif"
-            else                                                      -> "$base$name"
+            animated && !SUPPORTS_WEBP -> "$base$size.gif"
+            else                       -> "$base$name"
         }
     }
 
@@ -564,6 +581,7 @@ class EmoteRepository @Inject constructor(
         }
 
     companion object {
+        private val SUPPORTS_WEBP = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
         fun Badge.cacheKey(baseHeight: Int): String = "$url-$baseHeight"
         fun List<ChatMessageEmote>.cacheKey(baseHeight: Int): String = joinToString(separator = "-") { it.id } + "-$baseHeight"
 

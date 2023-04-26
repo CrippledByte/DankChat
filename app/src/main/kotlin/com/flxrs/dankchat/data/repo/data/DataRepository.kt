@@ -1,6 +1,7 @@
 package com.flxrs.dankchat.data.repo.data
 
 import android.util.Log
+import com.flxrs.dankchat.data.DisplayName
 import com.flxrs.dankchat.data.UserId
 import com.flxrs.dankchat.data.UserName
 import com.flxrs.dankchat.data.api.badges.BadgesApiClient
@@ -62,9 +63,9 @@ class DataRepository @Inject constructor(
     fun createFlowsIfNecessary(channels: List<UserName>) = emoteRepository.createFlowsIfNecessary(channels)
 
     suspend fun getUser(userId: UserId): UserDto? = helixApiClient.getUser(userId).getOrNull()
-    suspend fun getUserIdByName(name: UserName): UserId? = helixApiClient.getUserIdByName(name).getOrNull()
+    suspend fun getUserByName(name: UserName): UserDto? = helixApiClient.getUserByName(name).getOrNull()
     suspend fun getUsersByNames(names: List<UserName>): List<UserDto> = helixApiClient.getUsersByNames(names).getOrNull().orEmpty()
-    suspend fun getUserFollows(fromId: UserId, toId: UserId): UserFollowsDto? = helixApiClient.getUsersFollows(fromId, toId).getOrNull()
+    suspend fun getChannelFollowers(broadcasterId: UserId, targetId: UserId): UserFollowsDto? = helixApiClient.getChannelFollowers(broadcasterId, targetId).getOrNull()
     suspend fun getStreams(channels: List<UserName>): List<StreamDto>? = helixApiClient.getStreams(channels).getOrNull()
 
     suspend fun getSubage(channel: UserName, user: UserName): Result<IvrSubageDto?> = ivrApiClient.getSubage(channel, user)
@@ -76,10 +77,12 @@ class DataRepository @Inject constructor(
 
     suspend fun loadGlobalBadges() = withContext(Dispatchers.IO) {
         measureTimeAndLog(TAG, "global badges") {
-            val badges = badgesApiClient.getGlobalBadges()
-                .getOrEmitFailure { DataLoadingStep.GlobalBadges }
-                ?.toBadgeSets()
-            badges?.let { emoteRepository.setGlobalBadges(it) }
+            val badges = when {
+                dankChatPreferenceStore.isLoggedIn                -> helixApiClient.getGlobalBadges().map { it.toBadgeSets() }
+                System.currentTimeMillis() < BADGES_SUNSET_MILLIS -> badgesApiClient.getGlobalBadges().map { it.toBadgeSets() }
+                else                                              -> return@withContext
+            }.getOrEmitFailure { DataLoadingStep.GlobalBadges }
+            badges?.also { emoteRepository.setGlobalBadges(it) }
         }
     }
 
@@ -101,10 +104,12 @@ class DataRepository @Inject constructor(
 
     suspend fun loadChannelBadges(channel: UserName, id: UserId) = withContext(Dispatchers.IO) {
         measureTimeAndLog(TAG, "channel badges for #$id") {
-            val badges = badgesApiClient.getChannelBadges(id)
-                .getOrEmitFailure { DataLoadingStep.ChannelBadges(channel, id) }
-                ?.toBadgeSets()
-            badges?.let { emoteRepository.setChannelBadges(channel, it) }
+            val badges = when {
+                dankChatPreferenceStore.isLoggedIn                -> helixApiClient.getChannelBadges(id).map { it.toBadgeSets() }
+                System.currentTimeMillis() < BADGES_SUNSET_MILLIS -> badgesApiClient.getChannelBadges(id).map { it.toBadgeSets() }
+                else                                              -> return@withContext
+            }.getOrEmitFailure { DataLoadingStep.ChannelBadges(channel, id) }
+            badges?.also { emoteRepository.setChannelBadges(channel, it) }
         }
     }
 
@@ -120,15 +125,15 @@ class DataRepository @Inject constructor(
         }.let { Log.i(TAG, "Loaded FFZ emotes for #$channel in $it ms") }
     }
 
-    suspend fun loadChannelBTTVEmotes(channel: UserName, channelId: UserId) = withContext(Dispatchers.IO) {
+    suspend fun loadChannelBTTVEmotes(channel: UserName, channelDisplayName: DisplayName, channelId: UserId) = withContext(Dispatchers.IO) {
         if (ThirdPartyEmoteType.BetterTTV !in dankChatPreferenceStore.visibleThirdPartyEmotes) {
             return@withContext
         }
 
         measureTimeMillis {
             bttvApiClient.getBTTVChannelEmotes(channelId)
-                .getOrEmitFailure { DataLoadingStep.ChannelBTTVEmotes(channel, channelId) }
-                ?.let { emoteRepository.setBTTVEmotes(channel, it) }
+                .getOrEmitFailure { DataLoadingStep.ChannelBTTVEmotes(channel, channelDisplayName, channelId) }
+                ?.let { emoteRepository.setBTTVEmotes(channel, channelDisplayName, it) }
         }.let { Log.i(TAG, "Loaded BTTV emotes for #$channel in $it ms") }
     }
 
@@ -188,5 +193,6 @@ class DataRepository @Inject constructor(
 
     companion object {
         private val TAG = DataRepository::class.java.simpleName
+        private const val BADGES_SUNSET_MILLIS = 1685637000000L // 2023-06-01 16:30:00
     }
 }

@@ -5,13 +5,15 @@ import android.webkit.CookieManager
 import android.webkit.WebStorage
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.flxrs.dankchat.chat.menu.EmoteMenuTab
-import com.flxrs.dankchat.chat.menu.EmoteMenuTabItem
+import com.flxrs.dankchat.chat.FullScreenSheetState
+import com.flxrs.dankchat.chat.InputSheetState
+import com.flxrs.dankchat.chat.emotemenu.EmoteMenuTab
+import com.flxrs.dankchat.chat.emotemenu.EmoteMenuTabItem
 import com.flxrs.dankchat.chat.suggestion.Suggestion
-import com.flxrs.dankchat.data.UserId
 import com.flxrs.dankchat.data.UserName
 import com.flxrs.dankchat.data.api.ApiException
 import com.flxrs.dankchat.data.repo.IgnoresRepository
+import com.flxrs.dankchat.data.repo.channel.ChannelRepository
 import com.flxrs.dankchat.data.repo.chat.ChatLoadingFailure
 import com.flxrs.dankchat.data.repo.chat.ChatLoadingStep
 import com.flxrs.dankchat.data.repo.chat.ChatRepository
@@ -29,7 +31,6 @@ import com.flxrs.dankchat.data.state.ImageUploadState
 import com.flxrs.dankchat.data.twitch.chat.ConnectionState
 import com.flxrs.dankchat.data.twitch.command.TwitchCommand
 import com.flxrs.dankchat.data.twitch.emote.EmoteType
-import com.flxrs.dankchat.data.twitch.emote.GenericEmote
 import com.flxrs.dankchat.data.twitch.message.RoomState
 import com.flxrs.dankchat.data.twitch.message.SystemMessageType
 import com.flxrs.dankchat.data.twitch.message.WhisperMessage
@@ -60,7 +61,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -90,6 +90,7 @@ class MainViewModel @Inject constructor(
     private val commandRepository: CommandRepository,
     private val emoteUsageRepository: EmoteUsageRepository,
     private val ignoresRepository: IgnoresRepository,
+    private val channelRepository: ChannelRepository,
     private val dankChatPreferenceStore: DankChatPreferenceStore,
 ) : ViewModel() {
 
@@ -108,9 +109,8 @@ class MainViewModel @Inject constructor(
     private val roomStateEnabled = MutableStateFlow(true)
     private val streamData = MutableStateFlow<List<StreamData>>(emptyList())
     private val currentSuggestionChannel = MutableStateFlow<UserName?>(null)
-    private val whisperTabSelected = MutableStateFlow(false)
-    private val emoteSheetOpen = MutableStateFlow(false)
-    private val mentionSheetOpen = MutableStateFlow(false)
+    private val inputSheetState = MutableStateFlow<InputSheetState>(InputSheetState.Closed)
+    private val fullScreenSheetState = MutableStateFlow<FullScreenSheetState>(FullScreenSheetState.Closed)
     private val _currentStreamedChannel = MutableStateFlow<UserName?>(null)
     private val _isFullscreen = MutableStateFlow(false)
     private val shouldShowChips = MutableStateFlow(true)
@@ -158,9 +158,9 @@ class MainViewModel @Inject constructor(
     }.map { triggers -> triggers.map { Suggestion.CommandSuggestion(it) } }
 
     private val currentBottomText: Flow<String> =
-        combine(roomStateText, currentStreamInformation, mentionSheetOpen) { roomState, streamInfo, mentionSheetOpen ->
+        combine(roomStateText, currentStreamInformation, fullScreenSheetState) { roomState, streamInfo, chatSheetState ->
             listOfNotNull(roomState, streamInfo)
-                .takeUnless { mentionSheetOpen }
+                .takeUnless { chatSheetState.isOpen }
                 ?.joinToString(separator = " - ")
                 .orEmpty()
         }
@@ -169,15 +169,19 @@ class MainViewModel @Inject constructor(
         combine(
             roomStateEnabled,
             streamInfoEnabled,
-            mentionSheetOpen,
+            fullScreenSheetState,
             currentBottomText
-        ) { roomStateEnabled, streamInfoEnabled, mentionSheetOpen, bottomText ->
-            (roomStateEnabled || streamInfoEnabled) && !mentionSheetOpen && bottomText.isNotBlank()
+        ) { roomStateEnabled, streamInfoEnabled, chatSheetState, bottomText ->
+            (roomStateEnabled || streamInfoEnabled) && !chatSheetState.isOpen && bottomText.isNotBlank()
         }
 
     private val loadingFailures = combine(dataRepository.dataLoadingFailures, chatRepository.chatLoadingFailures) { data, chat ->
         data to chat
     }.stateIn(viewModelScope, SharingStarted.Eagerly, Pair(emptySet(), emptySet()))
+
+    private val connectionState = activeChannel
+        .flatMapLatestOrDefault(ConnectionState.DISCONNECTED) { chatRepository.getConnectionState(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(stopTimeout = 5.seconds), ConnectionState.DISCONNECTED)
 
     init {
         viewModelScope.launch {
@@ -248,13 +252,22 @@ class MainViewModel @Inject constructor(
         isUploading || isDataLoading
     }.stateIn(viewModelScope, started = SharingStarted.WhileSubscribed(stopTimeout = 5.seconds), false)
 
-    val connectionState = activeChannel
-        .flatMapLatestOrDefault(ConnectionState.DISCONNECTED) { chatRepository.getConnectionState(it) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(stopTimeout = 5.seconds), ConnectionState.DISCONNECTED)
+    val inputState: StateFlow<InputState> = combine(connectionState, fullScreenSheetState, inputSheetState) { connectionState, chatSheetState, inputSheetState ->
+        val inputIsReply = inputSheetState is InputSheetState.Replying || (inputSheetState as? InputSheetState.Emotes)?.previousReply != null
+        when (connectionState) {
+            ConnectionState.CONNECTED               -> when {
+                chatSheetState is FullScreenSheetState.Replies || inputIsReply -> InputState.Replying
+                else                                                           -> InputState.Default
+            }
 
-    val canType: StateFlow<Boolean> = combine(connectionState, mentionSheetOpen, whisperTabSelected) { connectionState, mentionSheetOpen, whisperTabSelected ->
+            ConnectionState.CONNECTED_NOT_LOGGED_IN -> InputState.NotLoggedIn
+            ConnectionState.DISCONNECTED            -> InputState.Disconnected
+        }
+    }.stateIn(viewModelScope, started = SharingStarted.WhileSubscribed(stopTimeout = 5.seconds), InputState.Disconnected)
+
+    val canType: StateFlow<Boolean> = combine(connectionState, fullScreenSheetState) { connectionState, fullScreenSheetState ->
         val canTypeInConnectionState = connectionState == ConnectionState.CONNECTED || !dankChatPreferenceStore.autoDisableInput
-        (!mentionSheetOpen && canTypeInConnectionState) || (whisperTabSelected && canTypeInConnectionState)
+        (fullScreenSheetState != FullScreenSheetState.Mention && canTypeInConnectionState)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(stopTimeout = 5.seconds), false)
 
     data class BottomTextState(val enabled: Boolean = true, val text: String = "")
@@ -274,8 +287,8 @@ class MainViewModel @Inject constructor(
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(stopTimeout = 5.seconds), false)
 
     val shouldShowEmoteMenuIcon: StateFlow<Boolean> =
-        combine(canType, mentionSheetOpen) { canType, mentionSheetOpen ->
-            canType && !mentionSheetOpen
+        combine(canType, fullScreenSheetState) { canType, chatSheetState ->
+            canType && !chatSheetState.isMentionSheet
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(stopTimeout = 5.seconds), false)
 
     val suggestions: StateFlow<Triple<List<Suggestion.UserSuggestion>, List<Suggestion.EmoteSuggestion>, List<Suggestion.CommandSuggestion>>> = combine(
@@ -345,8 +358,8 @@ class MainViewModel @Inject constructor(
             canShowChips && channel != null && channel in userState.moderationChannels
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(stopTimeout = 5.seconds), false)
 
-    val useCustomBackHandling: StateFlow<Boolean> = combine(isFullscreenFlow, emoteSheetOpen, mentionSheetOpen) { isFullscreen, emoteSheetOpen, mentionSheetOpen ->
-        isFullscreen || emoteSheetOpen || mentionSheetOpen
+    val useCustomBackHandling: StateFlow<Boolean> = combine(isFullscreenFlow, inputSheetState, fullScreenSheetState) { isFullscreen, inputSheetState, chatSheetState ->
+        isFullscreen || inputSheetState.isOpen || chatSheetState.isOpen
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(stopTimeout = 5.seconds), false)
 
     val currentStreamedChannel: StateFlow<UserName?> = _currentStreamedChannel.asStateFlow()
@@ -356,7 +369,13 @@ class MainViewModel @Inject constructor(
     val isFullscreen: Boolean
         get() = isFullscreenFlow.value
     val isEmoteSheetOpen: Boolean
-        get() = emoteSheetOpen.value
+        get() = inputSheetState.value is InputSheetState.Emotes
+    val isReplySheetOpen: Boolean
+        get() = inputSheetState.value is InputSheetState.Replying
+    val isWhisperTabOpen: Boolean
+        get() = fullScreenSheetState.value is FullScreenSheetState.Whisper
+    val isMentionTabOpen: Boolean
+        get() = fullScreenSheetState.value is FullScreenSheetState.Mention
 
     val currentRoomState: RoomState?
         get() {
@@ -376,7 +395,7 @@ class MainViewModel @Inject constructor(
 
             dataRepository.createFlowsIfNecessary(channels = channelList + WhisperMessage.WHISPER_CHANNEL)
 
-            val channelPairs = getChannelNameIdPairs(channelList)
+            val channels = channelRepository.getChannels(channelList)
             awaitAll(
                 async { dataRepository.loadDankChatBadges() },
                 async { dataRepository.loadGlobalBadges() },
@@ -385,11 +404,11 @@ class MainViewModel @Inject constructor(
                 async { dataRepository.loadGlobalBTTVEmotes() },
                 async { dataRepository.loadGlobalFFZEmotes() },
                 async { dataRepository.loadGlobalSevenTVEmotes() },
-                *channelPairs.flatMap { (channel, channelId) ->
+                *channels.flatMap { (channelId, channel, channelDisplayName) ->
                     chatRepository.createFlowsIfNecessary(channel)
                     listOf(
                         async { dataRepository.loadChannelBadges(channel, channelId) },
-                        async { dataRepository.loadChannelBTTVEmotes(channel, channelId) },
+                        async { dataRepository.loadChannelBTTVEmotes(channel, channelDisplayName, channelId) },
                         async { dataRepository.loadChannelFFZEmotes(channel, channelId) },
                         async { dataRepository.loadChannelSevenTVEmotes(channel, channelId) },
                         async { chatRepository.loadChatters(channel) },
@@ -434,7 +453,7 @@ class MainViewModel @Inject constructor(
                     is DataLoadingStep.ChannelBadges        -> dataRepository.loadChannelBadges(it.step.channel, it.step.channelId)
                     is DataLoadingStep.ChannelSevenTVEmotes -> dataRepository.loadChannelSevenTVEmotes(it.step.channel, it.step.channelId)
                     is DataLoadingStep.ChannelFFZEmotes     -> dataRepository.loadChannelFFZEmotes(it.step.channel, it.step.channelId)
-                    is DataLoadingStep.ChannelBTTVEmotes    -> dataRepository.loadChannelBTTVEmotes(it.step.channel, it.step.channelId)
+                    is DataLoadingStep.ChannelBTTVEmotes    -> dataRepository.loadChannelBTTVEmotes(it.step.channel, it.step.channelDisplayName, it.step.channelId)
                 }
             }
         } + chatLoadingFailures.map {
@@ -465,7 +484,7 @@ class MainViewModel @Inject constructor(
             }
 
             val activeChannel = getActiveChannel() ?: return@launch
-            val channelId = dataRepository.getUserIdByName(activeChannel) ?: return@launch
+            val channelId = channelRepository.getChannel(activeChannel)?.id ?: return@launch
             ignoresRepository.addUserBlock(channelId, activeChannel)
         }
     }
@@ -480,28 +499,36 @@ class MainViewModel @Inject constructor(
         currentSuggestionChannel.value = channel
     }
 
-    fun setMentionSheetOpen(enabled: Boolean) {
+    fun setFullScreenSheetState(state: FullScreenSheetState) {
         repeatedSend.update { it.copy(enabled = false) }
-        mentionSheetOpen.value = enabled
-        if (enabled) when (whisperTabSelected.value) {
-            true -> chatRepository.clearMentionCount(WhisperMessage.WHISPER_CHANNEL)
-            else -> chatRepository.clearMentionCounts()
+        fullScreenSheetState.update { state }
+        when (state) {
+            FullScreenSheetState.Whisper -> chatRepository.clearMentionCount(WhisperMessage.WHISPER_CHANNEL) // TODO check clearing when already in whisper tab
+            FullScreenSheetState.Mention -> chatRepository.clearMentionCounts()
+            else                         -> Unit
         }
     }
 
-    fun setEmoteSheetOpen(enabled: Boolean) {
-        emoteSheetOpen.update { enabled }
-    }
-
-    fun setWhisperTabSelected(open: Boolean) {
-        repeatedSend.update { it.copy(enabled = false) }
-        whisperTabSelected.value = open
-        if (mentionSheetOpen.value) {
-            when {
-                open -> chatRepository.clearMentionCount(WhisperMessage.WHISPER_CHANNEL)
-                else -> chatRepository.clearMentionCounts()
+    fun setEmoteInputSheetState() {
+        inputSheetState.update {
+            when (it) {
+                is InputSheetState.Emotes -> it
+                else                      -> InputSheetState.Emotes(previousReply = it as? InputSheetState.Replying)
             }
         }
+    }
+
+    fun setReplyingInputSheetState(replyMessageId: String, replyName: UserName) {
+        inputSheetState.update {
+            InputSheetState.Replying(replyMessageId, replyName)
+        }
+    }
+
+    fun closeInputSheet(): InputSheetState {
+        inputSheetState.update {
+            (it as? InputSheetState.Emotes)?.previousReply ?: InputSheetState.Closed
+        }
+        return inputSheetState.value
     }
 
     fun clear(channel: UserName) = chatRepository.clear(channel)
@@ -511,14 +538,17 @@ class MainViewModel @Inject constructor(
     fun joinChannel(channel: UserName): List<UserName> = chatRepository.joinChannel(channel)
     fun trySendMessageOrCommand(message: String, skipSuspendingCommands: Boolean = false) = viewModelScope.launch {
         val channel = currentSuggestionChannel.value ?: return@launch
+        val chatState = fullScreenSheetState.value
+        val inputSheetState = inputSheetState.value
+        val replyIdOrNull = chatState.replyIdOrNull ?: inputSheetState.replyIdOrNull
         val commandResult = runCatching {
-            when {
-                mentionSheetOpen.value && whisperTabSelected.value -> commandRepository.checkForWhisperCommand(message, skipSuspendingCommands)
-
-                else                                               -> {
+            when (chatState) {
+                FullScreenSheetState.Whisper -> commandRepository.checkForWhisperCommand(message, skipSuspendingCommands)
+                else                         -> {
                     val roomState = currentRoomState ?: return@launch
                     val userState = chatRepository.userStateFlow.value
-                    commandRepository.checkForCommands(message, channel, roomState, userState, skipSuspendingCommands)
+                    val shouldSkip = skipSuspendingCommands || chatState is FullScreenSheetState.Replies
+                    commandRepository.checkForCommands(message, channel, roomState, userState, shouldSkip)
                 }
             }
         }.getOrElse {
@@ -531,7 +561,7 @@ class MainViewModel @Inject constructor(
             is CommandResult.Blocked               -> Unit
 
             is CommandResult.IrcCommand,
-            is CommandResult.NotFound              -> chatRepository.sendMessage(message)
+            is CommandResult.NotFound              -> chatRepository.sendMessage(message, replyIdOrNull)
 
             is CommandResult.AcceptedTwitchCommand -> {
                 if (commandResult.command == TwitchCommand.Whisper) {
@@ -543,7 +573,7 @@ class MainViewModel @Inject constructor(
             }
 
             is CommandResult.AcceptedWithResponse  -> chatRepository.makeAndPostCustomSystemMessage(commandResult.response, channel)
-            is CommandResult.Message               -> chatRepository.sendMessage(commandResult.message)
+            is CommandResult.Message               -> chatRepository.sendMessage(commandResult.message, replyIdOrNull)
         }
 
         if (commandResult != CommandResult.NotFound && commandResult != CommandResult.IrcCommand) {
@@ -562,7 +592,7 @@ class MainViewModel @Inject constructor(
         loadData()
     }
 
-    fun reloadEmotes(channel: UserName) = viewModelScope.launch {
+    fun reloadEmotes(channelName: UserName) = viewModelScope.launch {
         val isLoggedIn = dankChatPreferenceStore.isLoggedIn
         dataLoadingStateChannel.send(DataLoadingState.Loading)
         isDataLoading.update { true }
@@ -573,19 +603,18 @@ class MainViewModel @Inject constructor(
             chatRepository.reconnect(reconnectPubsub = false)
         }
 
-        val channelId = chatRepository.getRoomState(channel)
-            .firstValueOrNull?.channelId ?: dataRepository.getUserIdByName(channel)
+        val channel = channelRepository.getChannel(channelName)
 
         buildList {
             this += launch { dataRepository.loadDankChatBadges() }
             this += launch { dataRepository.loadGlobalBTTVEmotes() }
             this += launch { dataRepository.loadGlobalFFZEmotes() }
             this += launch { dataRepository.loadGlobalSevenTVEmotes() }
-            if (channelId != null) {
-                this += launch { dataRepository.loadChannelBadges(channel, channelId) }
-                this += launch { dataRepository.loadChannelBTTVEmotes(channel, channelId) }
-                this += launch { dataRepository.loadChannelFFZEmotes(channel, channelId) }
-                this += launch { dataRepository.loadChannelSevenTVEmotes(channel, channelId) }
+            if (channel != null) {
+                this += launch { dataRepository.loadChannelBadges(channelName, channel.id) }
+                this += launch { dataRepository.loadChannelBTTVEmotes(channelName, channel.displayName, channel.id) }
+                this += launch { dataRepository.loadChannelFFZEmotes(channelName, channel.id) }
+                this += launch { dataRepository.loadChannelSevenTVEmotes(channelName, channel.id) }
             }
         }.joinAll()
 
@@ -724,8 +753,8 @@ class MainViewModel @Inject constructor(
         trySendMessageOrCommand(command)
     }
 
-    fun addEmoteUsage(emote: GenericEmote) = viewModelScope.launch {
-        emoteUsageRepository.addEmoteUsage(emote.id)
+    fun addEmoteUsage(id: String) = viewModelScope.launch {
+        emoteUsageRepository.addEmoteUsage(id)
     }
 
     private suspend fun checkFailuresAndEmitState() {
@@ -810,35 +839,6 @@ class MainViewModel @Inject constructor(
         }
     }
 
-    private suspend fun getChannelNameIdPairs(channels: List<UserName>): List<Pair<UserName, UserId>> = withContext(Dispatchers.IO) {
-        val (roomStatePairs, remaining) = channels.fold(Pair(emptyList<RoomState>(), emptyList<UserName>())) { (states, remaining), user ->
-            when (val state = chatRepository.getRoomState(user).firstValueOrNull) {
-                null -> states to remaining + user
-                else -> states + state to remaining
-            }
-        }
-
-        val remainingPairs = when {
-            dankChatPreferenceStore.isLoggedIn -> dataRepository
-                .getUsersByNames(remaining)
-                .map { it.name to it.id }
-
-            else                               ->
-                remaining.map { user ->
-                    async {
-                        withTimeoutOrNull(getRoomStateDelay(remaining)) {
-                            chatRepository
-                                .getRoomState(user)
-                                .firstOrNull()
-                                ?.let { it.channel to it.channelId }
-                        }
-                    }
-                }.awaitAll().filterNotNull()
-        }
-
-        roomStatePairs.map { it.channel to it.channelId } + remainingPairs
-    }
-
     private fun clearIgnores() = ignoresRepository.clearIgnores()
 
     fun clearDataForLogout() {
@@ -857,7 +857,5 @@ class MainViewModel @Inject constructor(
         private const val STREAM_REFRESH_RATE = 30_000L
         private const val IRC_TIMEOUT_DELAY = 5_000L
         private const val IRC_TIMEOUT_SHORT_DELAY = 1_000L
-        private const val IRC_TIMEOUT_CHANNEL_DELAY = 600L
-        private fun getRoomStateDelay(channels: List<UserName>): Long = IRC_TIMEOUT_DELAY + channels.size * IRC_TIMEOUT_CHANNEL_DELAY
     }
 }

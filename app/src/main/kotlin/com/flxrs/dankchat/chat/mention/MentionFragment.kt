@@ -6,8 +6,11 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
+import androidx.navigation.fragment.navArgs
 import androidx.viewpager2.widget.ViewPager2
 import com.flxrs.dankchat.R
+import com.flxrs.dankchat.chat.FullScreenSheetState
+import com.flxrs.dankchat.data.twitch.message.WhisperMessage
 import com.flxrs.dankchat.databinding.MentionFragmentBinding
 import com.flxrs.dankchat.main.MainViewModel
 import com.flxrs.dankchat.utils.extensions.collectFlow
@@ -17,10 +20,9 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class MentionFragment : Fragment() {
 
-    private val mainViewModel: MainViewModel by viewModels(
-        ownerProducer = { requireParentFragment() }
-    )
+    private val mainViewModel: MainViewModel by viewModels({ requireParentFragment() })
     private val mentionViewModel: MentionViewModel by viewModels()
+    private val args: MentionFragmentArgs by navArgs()
     private var bindingRef: MentionFragmentBinding? = null
     private val binding get() = bindingRef!!
     private lateinit var tabAdapter: MentionTabAdapter
@@ -39,10 +41,18 @@ class MentionFragment : Fragment() {
             }.apply { attach() }
         }
 
+        mainViewModel.setSuggestionChannel(WhisperMessage.WHISPER_CHANNEL)
+        mainViewModel.setFullScreenSheetState(binding.mentionTabs.selectedTabPosition.pageIndexToSheetState())
         return binding.root
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        if (savedInstanceState == null && args.openWhisperTab) {
+            view.post {
+                binding.mentionViewpager.setCurrentItem(1, true)
+            }
+        }
+
         mentionViewModel.apply {
             collectFlow(hasMentions) {
                 when {
@@ -68,18 +78,31 @@ class MentionFragment : Fragment() {
         super.onDestroyView()
     }
 
+    fun scrollToWhisperTab() {
+        binding.mentionViewpager.setCurrentItem(1, true)
+    }
+
     private fun ViewPager2.setup() {
         adapter = tabAdapter
-        offscreenPageLimit = 2
+        offscreenPageLimit = 1
         registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
-                mainViewModel.setWhisperTabSelected(position == 1)
+                mainViewModel.setFullScreenSheetState(position.pageIndexToSheetState())
                 bindingRef?.mentionTabs?.getTabAt(position)?.removeBadge()
             }
         })
     }
 
+    private fun Int.pageIndexToSheetState() = when (this) {
+        0    -> FullScreenSheetState.Mention
+        else -> FullScreenSheetState.Whisper
+    }
+
     companion object {
         private val TAG = MentionFragment::class.java.simpleName
+
+        fun newInstance(openWhisperTab: Boolean = false) = MentionFragment().apply {
+            arguments = MentionFragmentArgs(openWhisperTab).toBundle()
+        }
     }
 }
