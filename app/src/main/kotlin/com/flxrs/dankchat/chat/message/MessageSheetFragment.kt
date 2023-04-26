@@ -64,6 +64,8 @@ class MessageSheetFragment : BottomSheetDialogFragment() {
                     }
                     messageCopy.setOnClickListener { sendResultAndDismiss(MessageSheetResult.Copy(state.originalMessage)) }
                     messageMoreActions.setOnClickListener { sendResultAndDismiss(MessageSheetResult.OpenMoreActions(args.messageId, args.fullMessage)) }
+
+                    messageText.text = state.originalMessage
                 }
             }
 
