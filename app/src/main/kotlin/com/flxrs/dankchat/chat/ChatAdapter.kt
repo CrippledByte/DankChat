@@ -92,6 +92,12 @@ class ChatAdapter(
 
     override fun onViewRecycled(holder: ViewHolder) {
         holder.scope.coroutineContext.cancelChildren()
+        with(holder.binding) {
+            (itemText.text as? Spannable)?.clearSpans()
+            itemText.text = ""
+            itemReply.text = ""
+        }
+
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
             emoteRepository.gifCallback.removeView(holder.binding.itemText)
         }
@@ -102,6 +108,11 @@ class ChatAdapter(
     @SuppressLint("ClickableViewAccessibility")
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val item = getItem(position)
+        holder.scope.coroutineContext.cancelChildren()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+            emoteRepository.gifCallback.removeView(holder.binding.itemText)
+        }
+
         holder.binding.replyGroup.isVisible = false
         holder.binding.itemLayout.setBackgroundColor(Color.TRANSPARENT)
         holder.binding.itemText.alpha = when (item.importance) {
@@ -383,7 +394,7 @@ class ChatAdapter(
         addLinks(spannableWithEmojis, onWhisperMessageClick)
 
         // copying message
-        val messageClickableSpan = object : LongClickableSpan() {
+        val messageClickableSpan = object : LongClickableSpan(checkBounds = false) {
             override fun onClick(v: View) = Unit
             override fun onLongClick(view: View) = onWhisperMessageClick()
             override fun updateDrawState(ds: TextPaint) {
@@ -579,7 +590,7 @@ class ChatAdapter(
         }
 
         // copying message
-        val messageClickableSpan = object : LongClickableSpan() {
+        val messageClickableSpan = object : LongClickableSpan(checkBounds = false) {
             override fun onClick(v: View) = Unit
             override fun onLongClick(view: View) = onMessageClick()
             override fun updateDrawState(ds: TextPaint) {
@@ -809,6 +820,11 @@ class ChatAdapter(
                     } catch (e: ActivityNotFoundException) {
                         Log.e("ViewBinding", Log.getStackTraceString(e))
                     }
+                }
+
+                override fun updateDrawState(ds: TextPaint) {
+                    ds.color = ds.linkColor
+                    ds.isUnderlineText = false
                 }
             }
             spannableWithEmojis[start..fixedEnd] = clickableSpan
