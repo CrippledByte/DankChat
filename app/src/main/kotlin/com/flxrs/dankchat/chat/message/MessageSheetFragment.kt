@@ -1,5 +1,6 @@
 package com.flxrs.dankchat.chat.message
 
+import android.graphics.Color
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -13,6 +14,7 @@ import com.flxrs.dankchat.R
 import com.flxrs.dankchat.databinding.MessageBottomsheetBinding
 import com.flxrs.dankchat.databinding.TimeoutDialogBinding
 import com.flxrs.dankchat.main.MainFragment
+import com.flxrs.dankchat.main.MainViewModel
 import com.flxrs.dankchat.utils.extensions.collectFlow
 import com.flxrs.dankchat.utils.extensions.isLandscape
 import com.flxrs.dankchat.utils.extensions.showShortSnackbar
@@ -31,12 +33,19 @@ class MessageSheetFragment : BottomSheetDialogFragment() {
     private var bindingRef: MessageBottomsheetBinding? = null
     private val binding get() = bindingRef!!
 
+    private var sendConfirm = false
+    private val mainViewModel: MainViewModel by viewModels()
+
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         bindingRef = MessageBottomsheetBinding.inflate(inflater, container, false)
         return binding.root
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        // Reset confirm var and set active channel for send button
+        sendConfirm = false
+        mainViewModel.setActiveChannel(args.channel)
+
         collectFlow(viewModel.state) { state ->
             when (state) {
                 MessageSheetState.Default  -> Unit
@@ -65,10 +74,21 @@ class MessageSheetFragment : BottomSheetDialogFragment() {
                     messageCopy.setOnClickListener { sendResultAndDismiss(MessageSheetResult.Copy(state.originalMessage)) }
                     messageMoreActions.setOnClickListener { sendResultAndDismiss(MessageSheetResult.OpenMoreActions(args.messageId, args.fullMessage)) }
 
-                    messageText.text = state.originalMessage
+                    messageText.text = state.originalMessage // Show message text in popup
+                    // Show confirm text before sending message
+                    messageSend.setOnClickListener(View.OnClickListener {
+                        if (sendConfirm) {
+                            mainViewModel.trySendMessageOrCommand(state.originalMessage)
+                            dialog?.dismiss()
+                        }
+                        else {
+                            binding.messageSend.text = "Confirm to send"
+                            binding.messageSend.setBackgroundColor(Color.parseColor("#40ff0000"))
+                            sendConfirm = true
+                        }
+                    })
                 }
             }
-
         }
     }
 

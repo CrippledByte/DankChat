@@ -43,10 +43,23 @@
                     android:paddingVertical="10dp"
                     android:background="#40000000"
                     android:textSize="14sp"
-                    app:layout_constraintBottom_toTopOf="@id/message_reply"
+                    app:layout_constraintBottom_toTopOf="@id/message_send"
                     app:layout_constraintEnd_toEndOf="parent"
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toTopOf="parent" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/message_send"
+                    style="@style/Widget.App.TextIconButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Send"
+                    app:icon="@drawable/ic_send"
+                    app:layout_constraintBottom_toTopOf="@id/message_reply"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toBottomOf="@id/message_text" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/message_reply"
@@ -59,7 +72,7 @@
                     app:layout_constraintBottom_toTopOf="@id/message_view_thread"
                     app:layout_constraintEnd_toEndOf="parent"
                     app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toBottomOf="@id/message_text" />
+                    app:layout_constraintTop_toBottomOf="@id/message_send" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/message_view_thread"
