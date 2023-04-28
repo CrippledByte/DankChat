@@ -15,6 +15,7 @@ import com.flxrs.dankchat.databinding.MessageBottomsheetBinding
 import com.flxrs.dankchat.databinding.TimeoutDialogBinding
 import com.flxrs.dankchat.main.MainFragment
 import com.flxrs.dankchat.main.MainViewModel
+import com.flxrs.dankchat.preferences.DankChatPreferenceStore
 import com.flxrs.dankchat.utils.extensions.collectFlow
 import com.flxrs.dankchat.utils.extensions.isLandscape
 import com.flxrs.dankchat.utils.extensions.showShortSnackbar
@@ -24,6 +25,7 @@ import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MessageSheetFragment : BottomSheetDialogFragment() {
@@ -40,6 +42,9 @@ class MessageSheetFragment : BottomSheetDialogFragment() {
         bindingRef = MessageBottomsheetBinding.inflate(inflater, container, false)
         return binding.root
     }
+
+    @Inject
+    lateinit var dankChatPreferences: DankChatPreferenceStore
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         // Reset confirm var and set active channel for send button
@@ -75,6 +80,12 @@ class MessageSheetFragment : BottomSheetDialogFragment() {
                     messageMoreActions.setOnClickListener { sendResultAndDismiss(MessageSheetResult.OpenMoreActions(args.messageId, args.fullMessage)) }
 
                     messageText.text = state.originalMessage // Show message text in popup
+
+                    // hide send button if input is hidden
+                    if (!dankChatPreferences.isInputEnabled) {
+                        messageSend.visibility = View.GONE
+                    }
+
                     // Show confirm text before sending message
                     messageSend.setOnClickListener(View.OnClickListener {
                         if (sendConfirm) {
