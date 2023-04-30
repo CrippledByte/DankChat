@@ -10,7 +10,7 @@ import android.widget.TextView
 import androidx.core.os.postDelayed
 
 object LongClickLinkMovementMethod : LinkMovementMethod() {
-    private const val LONG_CLICK_TIME = 500L
+    private const val LONG_CLICK_TIME = 250L
     private const val CLICKABLE_OFFSET = 10
     private var isLongPressed = false
     private val longClickHandler = Handler(Looper.getMainLooper())
