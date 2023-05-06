@@ -291,7 +291,7 @@ class DankChatPreferenceStore @Inject constructor(
         editor.apply()
     }
 
-    fun formatViewersString(viewers: Int): String = context.resources.getQuantityString(R.plurals.viewers, viewers, viewers)
+    fun formatViewersString(viewers: Int, uptime: String): String = context.resources.getQuantityString(R.plurals.viewers_and_uptime, viewers, viewers, uptime)
 
     fun clearLogin() = dankChatPreferences.edit {
         putBoolean(LOGGED_IN_KEY, false)

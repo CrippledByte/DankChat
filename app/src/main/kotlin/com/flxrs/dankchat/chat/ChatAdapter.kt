@@ -92,11 +92,7 @@ class ChatAdapter(
 
     override fun onViewRecycled(holder: ViewHolder) {
         holder.scope.coroutineContext.cancelChildren()
-        with(holder.binding) {
-            (itemText.text as? Spannable)?.clearSpans()
-            itemText.text = ""
-            itemReply.text = ""
-        }
+        (holder.binding.itemText.text as? Spannable)?.clearSpans()
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
             emoteRepository.gifCallback.removeView(holder.binding.itemText)
@@ -410,6 +406,7 @@ class ChatAdapter(
         var hasAnimatedEmoteOrBadge = false
         holder.scope.launch(holder.coroutineHandler) {
             allowedBadges.forEachIndexed { idx, badge ->
+                ensureActive()
                 try {
                     val (start, end) = badgePositions[idx]
                     val cacheKey = badge.cacheKey(baseHeight)
@@ -444,6 +441,8 @@ class ChatAdapter(
                         val imageSpan = ImageSpan(drawable)
                         (text as Spannable)[start..end] = imageSpan
                     }
+                } catch (t: CancellationException) {
+                    throw t
                 } catch (t: Throwable) {
                     handleException(t)
                 }
@@ -457,6 +456,7 @@ class ChatAdapter(
                 emotes
                     .groupBy { it.position }
                     .forEach { (_, emotes) ->
+                        ensureActive()
                         val key = emotes.cacheKey(baseHeight)
                         // fast path, backed by lru cache
                         val layerDrawable = emoteRepository.layerCache[key] ?: calculateLayerDrawable(context, emotes, key, animateGifs, scaleFactor)
@@ -468,6 +468,8 @@ class ChatAdapter(
                             (text as Spannable).setEmoteSpans(emotes, fullPrefix, layerDrawable, onWhisperMessageClick)
                         }
                     }
+            } catch (t: CancellationException) {
+                throw t
             } catch (t: Throwable) {
                 handleException(t)
             }
@@ -476,6 +478,7 @@ class ChatAdapter(
                 emoteRepository.gifCallback.addView(holder.binding.itemText)
             }
 
+            ensureActive()
             (text as Spannable)[0..text.length] = messageClickableSpan
         }
     }
@@ -605,6 +608,7 @@ class ChatAdapter(
         holder.scope.launch(holder.coroutineHandler) {
             allowedBadges.forEachIndexed { idx, badge ->
                 try {
+                    ensureActive()
                     val (start, end) = badgePositions[idx]
                     val cacheKey = badge.cacheKey(baseHeight)
                     val cached = emoteRepository.badgeCache[cacheKey]
@@ -638,6 +642,8 @@ class ChatAdapter(
                         val imageSpan = ImageSpan(drawable, ImageSpan.ALIGN_BASELINE)
                         (text as Spannable)[start..end] = imageSpan
                     }
+                } catch (t: CancellationException) {
+                    throw t
                 } catch (t: Throwable) {
                     handleException(t)
                 }
@@ -651,6 +657,7 @@ class ChatAdapter(
                 emotes
                     .groupBy { it.position }
                     .forEach { (_, emotes) ->
+                        ensureActive()
                         val key = emotes.cacheKey(baseHeight)
                         // fast path, backed by lru cache
                         val layerDrawable = emoteRepository.layerCache[key] ?: calculateLayerDrawable(context, emotes, key, animateGifs, scaleFactor)
@@ -662,6 +669,8 @@ class ChatAdapter(
                             (text as Spannable).setEmoteSpans(emotes, fullPrefix, layerDrawable, onMessageClick)
                         }
                     }
+            } catch (t: CancellationException) {
+                throw t
             } catch (t: Throwable) {
                 handleException(t)
             }
@@ -670,6 +679,7 @@ class ChatAdapter(
                 emoteRepository.gifCallback.addView(holder.binding.itemText)
             }
 
+            ensureActive()
             (text as Spannable)[0..text.length] = messageClickableSpan
         }
     }
@@ -832,8 +842,6 @@ class ChatAdapter(
     }
 
     private fun TextView.handleException(throwable: Throwable) {
-        if (throwable is CancellationException) return // Ignore job cancellations
-
         val trace = Log.getStackTraceString(throwable)
         Log.e("DankChat-Rendering", trace)
 

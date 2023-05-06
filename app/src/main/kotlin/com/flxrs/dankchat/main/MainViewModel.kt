@@ -374,10 +374,17 @@ class MainViewModel @Inject constructor(
         get() = inputSheetState.value is InputSheetState.Emotes
     val isReplySheetOpen: Boolean
         get() = inputSheetState.value is InputSheetState.Replying
+    val currentReply: InputSheetState.Replying?
+        get() = inputSheetState.value as? InputSheetState.Replying
     val isWhisperTabOpen: Boolean
         get() = fullScreenSheetState.value is FullScreenSheetState.Whisper
     val isMentionTabOpen: Boolean
         get() = fullScreenSheetState.value is FullScreenSheetState.Mention
+
+    val isFullScreenSheetClosed: Boolean
+        get() = fullScreenSheetState.value is FullScreenSheetState.Closed
+    val isInputSheetClosed: Boolean
+        get() = inputSheetState.value is InputSheetState.Closed
 
     val currentRoomState: RoomState?
         get() {
@@ -679,23 +686,8 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch {
             fetchTimerJob = timer(STREAM_REFRESH_RATE) {
                 val data = dataRepository.getStreams(channels)?.map {
-                    var formatted = dankChatPreferenceStore.formatViewersString(it.viewerCount)
-
-                    try {
-                        // Try to calculate and show stream uptime
-                        val startedAt = Instant.parse(it.startedAt).atZone(ZoneId.systemDefault()).toEpochSecond()
-                        val now = ZonedDateTime.now().toEpochSecond()
-                        val duration = now.seconds - startedAt.seconds
-                        val uptime = duration.toComponents { days, hours, minutes, _, _ ->
-                            buildString {
-                                append(" for ")
-                                if (days > 0) append("${days}d ")
-                                if (hours > 0) append("${hours}h ")
-                                append("${minutes}m")
-                            }
-                        }
-                        formatted += uptime
-                    } catch(e: Exception) {}
+                    val uptime = DateTimeUtils.calculateUptime(it.startedAt)
+                    val formatted = dankChatPreferenceStore.formatViewersString(it.viewerCount, uptime)
 
                     StreamData(channel = it.userLogin, formattedData = formatted)
                 }.orEmpty()

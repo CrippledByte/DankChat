@@ -51,6 +51,7 @@ import com.flxrs.dankchat.ValidationResult
 import com.flxrs.dankchat.chat.ChatTabAdapter
 import com.flxrs.dankchat.chat.FullScreenSheetState
 import com.flxrs.dankchat.chat.InputSheetState
+import com.flxrs.dankchat.chat.emote.EmoteSheetFragment
 import com.flxrs.dankchat.chat.emote.EmoteSheetResult
 import com.flxrs.dankchat.chat.emotemenu.EmoteMenuFragment
 import com.flxrs.dankchat.chat.mention.MentionFragment
@@ -123,6 +124,81 @@ class MainFragment : Fragment() {
         }
 
         override fun onPageScrollStateChanged(state: Int) = closeInputSheets()
+    }
+
+    private val menuProvider = object : MenuProvider {
+        override fun onPrepareMenu(menu: Menu) {
+            with(menu) {
+                val isLoggedIn = dankChatPreferences.isLoggedIn
+                val shouldShowProgress = mainViewModel.shouldShowUploadProgress.value
+                val hasChannels = mainViewModel.getChannels().isNotEmpty()
+                val mentionIconColor = when (mainViewModel.shouldColorNotification.value) {
+                    true -> R.attr.colorError
+                    else -> R.attr.colorControlHighlight
+                }
+                findItem(R.id.menu_login)?.isVisible = !isLoggedIn
+                findItem(R.id.menu_account)?.isVisible = isLoggedIn
+                findItem(R.id.menu_manage)?.isVisible = hasChannels
+                findItem(R.id.menu_channel)?.isVisible = hasChannels
+                findItem(R.id.menu_open_channel)?.isVisible = hasChannels
+                findItem(R.id.menu_block_channel)?.isVisible = isLoggedIn
+                findItem(R.id.menu_mentions)?.apply {
+                    isVisible = hasChannels
+                    context?.let {
+                        val fallback = ContextCompat.getColor(it, android.R.color.white)
+                        val color = MaterialColors.getColor(it, mentionIconColor, fallback)
+                        icon?.setTintList(ColorStateList.valueOf(color))
+                    }
+                }
+
+                findItem(R.id.progress)?.apply {
+                    isVisible = shouldShowProgress
+                    actionView = ProgressBar(requireContext()).apply {
+                        indeterminateTintList = ColorStateList.valueOf(MaterialColors.getColor(this, R.attr.colorOnSurfaceVariant))
+                        isVisible = shouldShowProgress
+                    }
+                }
+
+                // Set notifications toggle icon
+                menu.findItem(R.id.menu_toggle_notifications).setIcon(
+                    if (dankChatPreferences.isNotificationsEnabled) R.drawable.ic_notifications else R.drawable.ic_notifications_off
+                )
+
+                // Set input toggle icon
+                menu.findItem(R.id.menu_toggle_input).setIcon(
+                    if (dankChatPreferences.isInputEnabled) R.drawable.ic_edit else R.drawable.ic_edit_off
+                )
+            }
+        }
+
+        override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
+            menuInflater.inflate(R.menu.menu, menu)
+        }
+
+        override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
+            when (menuItem.itemId) {
+                R.id.menu_reconnect                -> mainViewModel.reconnect()
+                R.id.menu_login, R.id.menu_relogin -> openLogin()
+                R.id.menu_logout                   -> showLogoutConfirmationDialog()
+                R.id.menu_toggle_notifications     -> toggleNotifications()
+                R.id.menu_toggle_input             -> toggleInput()
+                R.id.menu_add                      -> navigateSafe(R.id.action_mainFragment_to_addChannelDialogFragment).also { closeInputSheets() }
+                R.id.menu_mentions                 -> openMentionSheet()
+                R.id.menu_open_channel             -> openChannel()
+                R.id.menu_remove_channel           -> removeChannel()
+                R.id.menu_report_channel           -> reportChannel()
+                R.id.menu_block_channel            -> blockChannel()
+                R.id.menu_manage                   -> openManageChannelsDialog()
+                R.id.menu_reload_emotes            -> reloadEmotes()
+                R.id.menu_choose_media             -> showExternalHostingUploadDialogIfNotAcknowledged { requestGalleryMedia.launch(PickVisualMediaRequest(PickVisualMedia.ImageAndVideo)) }
+                R.id.menu_capture_image            -> startCameraCapture()
+                R.id.menu_capture_video            -> startCameraCapture(captureVideo = true)
+                R.id.menu_clear                    -> clear()
+                R.id.menu_settings                 -> navigateSafe(R.id.action_mainFragment_to_overviewSettingsFragment).also { hideKeyboard() }
+                else                               -> return false
+            }
+            return true
+        }
     }
 
     private fun closeInputSheets() {
@@ -224,81 +300,7 @@ class MainFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         initPreferences(view.context)
         binding.splitThumb?.background?.alpha = 150
-        activity?.addMenuProvider(object : MenuProvider {
-            override fun onPrepareMenu(menu: Menu) {
-                with(menu) {
-                    val isLoggedIn = dankChatPreferences.isLoggedIn
-                    val shouldShowProgress = mainViewModel.shouldShowUploadProgress.value
-                    val hasChannels = mainViewModel.getChannels().isNotEmpty()
-                    val mentionIconColor = when (mainViewModel.shouldColorNotification.value) {
-                        true -> R.attr.colorError
-                        else -> R.attr.colorControlHighlight
-                    }
-                    findItem(R.id.menu_login)?.isVisible = !isLoggedIn
-                    findItem(R.id.menu_account)?.isVisible = isLoggedIn
-                    findItem(R.id.menu_manage)?.isVisible = hasChannels
-                    findItem(R.id.menu_channel)?.isVisible = hasChannels
-                    findItem(R.id.menu_open_channel)?.isVisible = hasChannels
-                    findItem(R.id.menu_block_channel)?.isVisible = isLoggedIn
-                    findItem(R.id.menu_mentions)?.apply {
-                        isVisible = hasChannels
-                        context?.let {
-                            val fallback = ContextCompat.getColor(it, android.R.color.white)
-                            val color = MaterialColors.getColor(it, mentionIconColor, fallback)
-                            icon?.setTintList(ColorStateList.valueOf(color))
-                        }
-                    }
-
-                    findItem(R.id.progress)?.apply {
-                        isVisible = shouldShowProgress
-                        actionView = ProgressBar(requireContext()).apply {
-                            indeterminateTintList = ColorStateList.valueOf(MaterialColors.getColor(this, R.attr.colorOnSurfaceVariant))
-                            isVisible = shouldShowProgress
-                        }
-                    }
-
-                    // Set notifications toggle icon
-                    menu.findItem(R.id.menu_toggle_notifications).setIcon(
-                        if (dankChatPreferences.isNotificationsEnabled) R.drawable.ic_notifications else R.drawable.ic_notifications_off
-                    )
-
-                    // Set input toggle icon
-                    menu.findItem(R.id.menu_toggle_input).setIcon(
-                        if (dankChatPreferences.isInputEnabled) R.drawable.ic_edit else R.drawable.ic_edit_off
-                    )
-                }
-            }
-
-            override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
-                menuInflater.inflate(R.menu.menu, menu)
-//                menuInflater.inflateWithCrowdin(R.menu.menu, menu, resources)
-            }
-
-            override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
-                when (menuItem.itemId) {
-                    R.id.menu_reconnect                -> mainViewModel.reconnect()
-                    R.id.menu_login, R.id.menu_relogin -> openLogin()
-                    R.id.menu_logout                   -> showLogoutConfirmationDialog()
-                    R.id.menu_toggle_notifications     -> toggleNotifications()
-                    R.id.menu_toggle_input             -> toggleInput()
-                    R.id.menu_add                      -> navigateSafe(R.id.action_mainFragment_to_addChannelDialogFragment).also { closeInputSheets() }
-                    R.id.menu_mentions                 -> openMentionSheet()
-                    R.id.menu_open_channel             -> openChannel()
-                    R.id.menu_remove_channel           -> removeChannel()
-                    R.id.menu_report_channel           -> reportChannel()
-                    R.id.menu_block_channel            -> blockChannel()
-                    R.id.menu_manage                   -> openManageChannelsDialog()
-                    R.id.menu_reload_emotes            -> reloadEmotes()
-                    R.id.menu_choose_media             -> showExternalHostingUploadDialogIfNotAcknowledged { requestGalleryMedia.launch(PickVisualMediaRequest(PickVisualMedia.ImageAndVideo)) }
-                    R.id.menu_capture_image            -> startCameraCapture()
-                    R.id.menu_capture_video            -> startCameraCapture(captureVideo = true)
-                    R.id.menu_clear                    -> clear()
-                    R.id.menu_settings                 -> navigateSafe(R.id.action_mainFragment_to_overviewSettingsFragment).also { hideKeyboard() }
-                    else                               -> return false
-                }
-                return true
-            }
-        }, viewLifecycleOwner, Lifecycle.State.RESUMED)
+        activity?.addMenuProvider(menuProvider, viewLifecycleOwner, Lifecycle.State.RESUMED)
 
         mainViewModel.apply {
             collectFlow(imageUploadState, ::handleImageUploadState)
@@ -456,12 +458,6 @@ class MainFragment : Fragment() {
         tabLayoutMediator.attach()
         binding.tabs.addOnTabSelectedListener(tabSelectionListener)
 
-        val active = mainViewModel.getActiveChannel()
-        if (active != null) {
-            val index = tabAdapter.indexOfChannel(active)
-            binding.tabs.getTabAt(index)?.removeBadge()
-        }
-
         (requireActivity() as AppCompatActivity).apply {
             setSupportActionBar(binding.toolbar)
             supportActionBar?.setDisplayShowTitleEnabled(false) // hide 'DankChat' title on toolbar
@@ -469,7 +465,7 @@ class MainFragment : Fragment() {
 
             ViewCompat.setOnApplyWindowInsetsListener(binding.showChips) { v, insets ->
                 // additional margin for chips because of display cutouts/punch holes
-                val needsExtraMargin = binding.streamWebviewWrapper.isVisible || isLandscape || !mainViewModel.isFullscreen
+                val needsExtraMargin = bindingRef?.streamWebviewWrapper?.isVisible == true || isLandscape || !mainViewModel.isFullscreen
                 val extraMargin = when {
                     needsExtraMargin -> 0
                     else             -> insets.getInsets(Type.displayCutout()).top
@@ -530,13 +526,41 @@ class MainFragment : Fragment() {
                 if (index >= 0) {
                     when (index) {
                         binding.chatViewpager.currentItem -> clearNotificationsOfChannel(channel)
-                        else                              -> binding.chatViewpager.setCurrentItem(index, false)
+                        else                              -> binding.chatViewpager.post { binding.chatViewpager.setCurrentItem(index, false) }
                     }
                 }
                 channelToOpen = null
             } else {
                 val activeChannel = mainViewModel.getActiveChannel() ?: return
                 clearNotificationsOfChannel(activeChannel)
+            }
+        }
+
+        if (mainViewModel.isFullScreenSheetClosed) {
+            val existing = childFragmentManager.fragments.filter { it is MentionFragment || it is RepliesFragment }
+            if (existing.isNotEmpty()) {
+                childFragmentManager.commitNow(allowStateLoss = true) {
+                    existing.forEach(::remove)
+                }
+                fullscreenBottomSheetBehavior?.hide()
+            }
+        }
+
+        when {
+            mainViewModel.isInputSheetClosed -> {
+                val existing = childFragmentManager.fragments.filter { it is ReplyInputSheetFragment || it is EmoteSheetFragment }
+                if (existing.isNotEmpty()) {
+                    childFragmentManager.commitNow(allowStateLoss = true) {
+                        existing.forEach(::remove)
+                    }
+                    inputBottomSheetBehavior?.hide()
+                    binding.chatViewpager.updateLayoutParams<MarginLayoutParams> { bottomMargin = 0 }
+                }
+            }
+
+            mainViewModel.isReplySheetOpen   -> {
+                val reply = mainViewModel.currentReply ?: return
+                startReply(reply.replyMessageId, reply.replyName)
             }
         }
     }
@@ -630,7 +654,7 @@ class MainFragment : Fragment() {
     fun openReplies(replyMessageId: String) {
         inputBottomSheetBehavior?.hide()
         val fragment = RepliesFragment.newInstance(replyMessageId)
-        childFragmentManager.commitNow {
+        childFragmentManager.commitNow(allowStateLoss = true) {
             replace(R.id.full_screen_sheet_fragment, fragment)
         }
         fullscreenBottomSheetBehavior?.expand()
@@ -670,7 +694,7 @@ class MainFragment : Fragment() {
         lifecycleScope.launch {
             fullscreenBottomSheetBehavior?.awaitState(BottomSheetBehavior.STATE_HIDDEN)
             val fragment = MentionFragment.newInstance(openWhisperTab)
-            childFragmentManager.commitNow {
+            childFragmentManager.commitNow(allowStateLoss = true) {
                 replace(R.id.full_screen_sheet_fragment, fragment)
             }
             fullscreenBottomSheetBehavior?.expand()
@@ -714,7 +738,7 @@ class MainFragment : Fragment() {
 
     private fun startReply(replyMessageId: String, replyName: UserName) {
         val fragment = ReplyInputSheetFragment.newInstance(replyMessageId, replyName)
-        childFragmentManager.commitNow {
+        childFragmentManager.commitNow(allowStateLoss = true) {
             replace(R.id.input_sheet_fragment, fragment)
         }
         inputBottomSheetBehavior?.expand()
@@ -1266,7 +1290,7 @@ class MainFragment : Fragment() {
                 binding.input.clearFocus()
             }
 
-            childFragmentManager.commitNow {
+            childFragmentManager.commitNow(allowStateLoss = true) {
                 replace(R.id.input_sheet_fragment, EmoteMenuFragment())
             }
             inputBottomSheetBehavior?.expand()
@@ -1294,7 +1318,7 @@ class MainFragment : Fragment() {
                     mainViewModel.setSuggestionChannel(channel)
 
                     val existing = childFragmentManager.fragments.filter { it is MentionFragment || it is RepliesFragment }
-                    childFragmentManager.commitNow {
+                    childFragmentManager.commitNow(allowStateLoss = true) {
                         existing.forEach(::remove)
                     }
                 }
@@ -1326,7 +1350,7 @@ class MainFragment : Fragment() {
             if (behavior.isHidden) {
                 val previousState = mainViewModel.closeInputSheet()
                 val existing = childFragmentManager.fragments.filter { it is EmoteMenuFragment || it is ReplyInputSheetFragment }
-                childFragmentManager.commitNow {
+                childFragmentManager.commitNow(allowStateLoss = true) {
                     existing.forEach(::remove)
                 }
                 when (previousState) {
@@ -1343,11 +1367,11 @@ class MainFragment : Fragment() {
         setTokenizer(SpaceTokenizer())
         suggestionAdapter = SuggestionsArrayAdapter(binding.input.context, dankChatPreferences) { count ->
             dropDownHeight = if (count > 4) {
-                (binding.root.measuredHeight / 2.0).roundToInt() - height
+                (binding.root.height / 4.0).roundToInt()
             } else {
                 ViewGroup.LayoutParams.WRAP_CONTENT
             }
-            dropDownWidth = (binding.root.measuredWidth * 0.6).roundToInt()
+            dropDownWidth = (binding.root.width * 0.6).roundToInt()
         }
 
         setOnItemClickListener { parent, _, position, _ ->
