@@ -5,15 +5,21 @@ import android.content.Context
 import android.content.Context.CLIPBOARD_SERVICE
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.ClipData
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.core.content.ContextCompat
+import androidx.core.content.getSystemService
+import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
 import androidx.fragment.app.viewModels
 import androidx.preference.Preference
 import com.flxrs.dankchat.R
 import com.flxrs.dankchat.databinding.ImportSettingsBottomsheetBinding
+import com.flxrs.dankchat.databinding.CustomLoginBottomsheetBinding
+import com.flxrs.dankchat.databinding.EditDialogBinding
 import com.flxrs.dankchat.databinding.RmHostBottomsheetBinding
 import com.flxrs.dankchat.databinding.SettingsFragmentBinding
 import com.flxrs.dankchat.main.MainActivity
@@ -23,14 +29,20 @@ import com.flxrs.dankchat.preferences.ui.highlights.HighlightsViewModel
 import com.flxrs.dankchat.preferences.ui.highlights.MessageHighlightItem
 import com.flxrs.dankchat.preferences.ui.highlights.UserHighlightItem
 import com.flxrs.dankchat.utils.ChatterinoSettingsModel
+import com.flxrs.dankchat.preferences.ui.customlogin.CustomLoginState
+import com.flxrs.dankchat.preferences.ui.customlogin.CustomLoginViewModel
 import com.flxrs.dankchat.utils.extensions.collectFlow
 import com.flxrs.dankchat.utils.extensions.showRestartRequired
+import com.flxrs.dankchat.utils.extensions.truncate
 import com.flxrs.dankchat.utils.extensions.withTrailingSlash
+import com.flxrs.dankchat.utils.extensions.withoutOAuthPrefix
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.snackbar.Snackbar
 import com.squareup.moshi.JsonAdapter
 import com.squareup.moshi.JsonDataException
 import com.squareup.moshi.Moshi
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.textfield.TextInputLayout
 import dagger.hilt.android.AndroidEntryPoint
 import java.io.IOException
 import javax.inject.Inject
@@ -41,6 +53,8 @@ class DeveloperSettingsFragment : MaterialPreferenceFragmentCompat() {
 
     private val highlightsViewModel: HighlightsViewModel by viewModels()
     private var bottomSheetDialog: BottomSheetDialog? = null
+    private var customLoginBinding: CustomLoginBottomsheetBinding? = null
+    private val customLoginViewModel: CustomLoginViewModel by viewModels()
 
     @Inject
     lateinit var dankChatPreferenceStore: DankChatPreferenceStore
@@ -64,12 +78,58 @@ class DeveloperSettingsFragment : MaterialPreferenceFragmentCompat() {
         findPreference<Preference>(getString(R.string.preference_import_settings_key))?.apply {
             setOnPreferenceClickListener { showImportSettingsPreference(view) }
         }
+
+        findPreference<Preference>(getString(R.string.preference_custom_login_key))?.apply {
+            setOnPreferenceClickListener { showCustomLoginSheet(view) }
+        }
+        collectFlow(customLoginViewModel.customLoginState) {
+            val loginBinding = customLoginBinding ?: return@collectFlow
+            loginBinding.tokenInputLayout.error = null
+
+            if (it !is CustomLoginState.Loading) {
+                loginBinding.verifyLoadingBar.isVisible = false
+                loginBinding.verifyLogin.isVisible = true
+            }
+
+            when (it) {
+                CustomLoginState.Default          -> Unit
+                is CustomLoginState.Failure       -> loginBinding.tokenInputLayout.error = getString(R.string.custom_login_error_fallback, it.error.truncate(maxLength = 120))
+                CustomLoginState.TokenEmpty       -> loginBinding.tokenInputLayout.error = getString(R.string.custom_login_error_empty_token)
+                CustomLoginState.TokenInvalid     -> loginBinding.tokenInputLayout.error = getString(R.string.custom_login_error_invalid_token)
+                is CustomLoginState.MissingScopes -> {
+                    val scopes = it.missingScopes.joinToString()
+                    MaterialAlertDialogBuilder(view.context)
+                        .setTitle(R.string.custom_login_missing_scopes_title)
+                        .setMessage(getString(R.string.custom_login_missing_scopes_text, scopes))
+                        .setPositiveButton(R.string.custom_login_missing_scopes_continue) { _, _ ->
+                            customLoginViewModel.saveLogin(it.token, it.validation)
+                            bottomSheetDialog?.dismiss()
+                            view.showRestartRequired()
+                        }
+                        .setNegativeButton(R.string.dialog_cancel) { _, _ ->
+                            loginBinding.tokenInputLayout.error = getString(R.string.custom_login_error_missing_scopes, scopes.truncate(maxLength = 120))
+                        }
+                        .show()
+                }
+
+                CustomLoginState.Loading          -> {
+                    loginBinding.verifyLoadingBar.isVisible = true
+                    loginBinding.verifyLogin.isVisible = false
+                }
+
+                CustomLoginState.Validated        -> {
+                    bottomSheetDialog?.dismiss()
+                    view.showRestartRequired()
+                }
+            }
+        }
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
         bottomSheetDialog?.dismiss()
         bottomSheetDialog = null
+        customLoginBinding = null
     }
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
@@ -102,6 +162,61 @@ class DeveloperSettingsFragment : MaterialPreferenceFragmentCompat() {
                     dankChatPreferenceStore.customRmHost = newHost
                     view?.showRestartRequired()
                 }
+                bottomSheetDialog = null
+            }
+            behavior.isFitToContents = false
+            behavior.peekHeight = peekHeight
+            show()
+        }
+
+        return true
+    }
+
+    private fun showCustomLoginSheet(root: View): Boolean {
+        val context = root.context
+        val windowHeight = resources.displayMetrics.heightPixels
+        val peekHeight = (windowHeight * 0.6).roundToInt()
+        val binding = CustomLoginBottomsheetBinding.inflate(LayoutInflater.from(context), root as? ViewGroup, false).apply {
+            tokenInput.setText(dankChatPreferenceStore.oAuthKey?.withoutOAuthPrefix)
+
+            customLoginSheet.updateLayoutParams {
+                height = windowHeight
+            }
+            verifyLogin.setOnClickListener {
+                customLoginViewModel.validateCustomLogin(oAuthToken = tokenInput.text?.toString().orEmpty())
+            }
+
+            loginShowScopes.setOnClickListener {
+                val layout = EditDialogBinding.inflate(LayoutInflater.from(it.context)).apply {
+                    val scopes = customLoginViewModel.getScopes()
+                    dialogEdit.setText(scopes)
+                    dialogEdit.isSingleLine = false
+                    dialogEditLayout.endIconMode = TextInputLayout.END_ICON_CUSTOM
+                    dialogEditLayout.endIconDrawable = ContextCompat.getDrawable(it.context, R.drawable.ic_copy)
+                    dialogEditLayout.setEndIconOnClickListener {
+                        val clipData = ClipData.newPlainText("Login scopes", scopes)
+                        context.getSystemService<ClipboardManager>()?.setPrimaryClip(clipData)
+                    }
+                }
+                MaterialAlertDialogBuilder(it.context)
+                    .setTitle(R.string.custom_login_required_scopes)
+                    .setView(layout.root)
+                    .setNeutralButton(R.string.dialog_dismiss) { _, _ -> }
+                    .show()
+            }
+
+            loginReset.setOnClickListener {
+                tokenInputLayout.error = null
+                tokenInput.setText(dankChatPreferenceStore.oAuthKey.orEmpty())
+            }
+        }
+
+        customLoginBinding = binding
+        bottomSheetDialog = BottomSheetDialog(context).apply {
+            setContentView(binding.root)
+            setOnDismissListener {
+                bottomSheetDialog = null
+                customLoginBinding = null
             }
             behavior.isFitToContents = false
             behavior.peekHeight = peekHeight

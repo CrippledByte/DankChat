@@ -7,6 +7,7 @@ import com.flxrs.dankchat.data.api.helix.dto.BanRequestDto
 import com.flxrs.dankchat.data.api.helix.dto.ChatSettingsRequestDto
 import com.flxrs.dankchat.data.api.helix.dto.CommercialRequestDto
 import com.flxrs.dankchat.data.api.helix.dto.MarkerRequestDto
+import com.flxrs.dankchat.data.api.helix.dto.ShieldModeRequestDto
 import com.flxrs.dankchat.data.api.helix.dto.WhisperRequestDto
 import com.flxrs.dankchat.preferences.DankChatPreferenceStore
 import com.flxrs.dankchat.utils.extensions.withoutOAuthPrefix
@@ -233,5 +234,23 @@ class HelixApi(private val ktorClient: HttpClient, private val dankChatPreferenc
         bearerAuth(oAuth)
         parameter("broadcaster_id", broadcasterUserId)
         contentType(ContentType.Application.Json)
+    }
+
+    suspend fun postShoutout(broadcasterUserId: UserId, targetUserId: UserId, moderatorUserId: UserId): HttpResponse? = ktorClient.post("chat/shoutouts") {
+        val oAuth = dankChatPreferenceStore.oAuthKey?.withoutOAuthPrefix ?: return null
+        bearerAuth(oAuth)
+        parameter("from_broadcaster_id", broadcasterUserId)
+        parameter("to_broadcaster_id", targetUserId)
+        parameter("moderator_id", moderatorUserId)
+        contentType(ContentType.Application.Json)
+    }
+
+    suspend fun putShieldMode(broadcasterUserId: UserId, moderatorUserId: UserId, request: ShieldModeRequestDto): HttpResponse? = ktorClient.put("moderation/shield_mode") {
+        val oAuth = dankChatPreferenceStore.oAuthKey?.withoutOAuthPrefix ?: return null
+        bearerAuth(oAuth)
+        parameter("broadcaster_id", broadcasterUserId)
+        parameter("moderator_id", moderatorUserId)
+        contentType(ContentType.Application.Json)
+        setBody(request)
     }
 }

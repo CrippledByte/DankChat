@@ -1,5 +1,6 @@
 package com.flxrs.dankchat.preferences.ui.highlights
 
+import android.annotation.SuppressLint
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.core.view.ViewCompat
@@ -21,7 +22,7 @@ class HighlightsTabAdapter(
 
     inner class ItemViewHolder(val adapter: HighlightsItemAdapter, val binding: TabListBinding) : RecyclerView.ViewHolder(binding.root)
 
-    override fun getItemCount(): Int = HighlightsTab.values().size
+    override fun getItemCount(): Int = HighlightsTab.entries.size
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ItemViewHolder {
         val adapter = HighlightsItemAdapter(onAddItem, onDeleteItem, onDeleteTabItems, preferences)
@@ -53,6 +54,7 @@ class HighlightsTabAdapter(
             return oldItem.tab == newItem.tab
         }
 
+        @SuppressLint("DiffUtilEquals")
         override fun areContentsTheSame(oldItem: HighlightsTabItem, newItem: HighlightsTabItem): Boolean {
             return oldItem.items == newItem.items
         }

@@ -8,7 +8,6 @@ enum class TwitchCommand(val trigger: String) {
     AnnounceOrange(trigger = "announceorange"),
     AnnouncePurple(trigger = "announcepurple"),
     Ban(trigger = "ban"),
-    Unban(trigger = "unban"),
     Clear(trigger = "clear"),
     Color(trigger = "color"),
     Commercial(trigger = "commercial"),
@@ -18,29 +17,33 @@ enum class TwitchCommand(val trigger: String) {
     Followers(trigger = "followers"),
     FollowersOff(trigger = "followersoff"),
     Marker(trigger = "marker"),
-    Mods(trigger = "mods"),
     Mod(trigger = "mod"),
-    Unmod(trigger = "unmod"),
+    Mods(trigger = "mods"),
     R9kBeta(trigger = "r9kbeta"),
     R9kBetaOff(trigger = "r9kbetaoff"),
     Raid(trigger = "raid"),
-    Unraid(trigger = "unraid"),
+    Shield(trigger = "shield"),
+    ShieldOff(trigger = "shieldoff"),
+    Shoutout(trigger = "shoutout"),
     Slow(trigger = "slow"),
     SlowOff(trigger = "slowoff"),
     Subscribers(trigger = "subscribers"),
     SubscribersOff(trigger = "subscribersoff"),
     Timeout(trigger = "timeout"),
-    Untimeout(trigger = "untimeout"),
+    Unban(trigger = "unban"),
     UniqueChat(trigger = "uniquechat"),
     UniqueChatOff(trigger = "uniquechatoff"),
-    Vips(trigger = "vips"),
-    Vip(trigger = "vip"),
+    Unmod(trigger = "unmod"),
+    Unraid(trigger = "unraid"),
+    Untimeout(trigger = "untimeout"),
     Unvip(trigger = "unvip"),
+    Vip(trigger = "vip"),
+    Vips(trigger = "vips"),
     Whisper(trigger = "w");
 
     companion object {
-        val ALL_COMMANDS = TwitchCommand.values().toList()
-        val MODERATOR_COMMANDS = TwitchCommand.values().toList() - listOf(Commercial, Mods, Mod, Unmod, Raid, Unraid, Vips, Vip, Unvip)
+        val ALL_COMMANDS = TwitchCommand.entries
+        val MODERATOR_COMMANDS = TwitchCommand.entries - listOf(Commercial, Mods, Mod, Unmod, Raid, Unraid, Vips, Vip, Unvip)
         val USER_COMMANDS = listOf(Color, Whisper)
     }
 }

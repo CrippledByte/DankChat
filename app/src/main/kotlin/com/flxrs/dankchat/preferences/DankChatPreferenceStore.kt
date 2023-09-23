@@ -9,12 +9,21 @@ import androidx.preference.PreferenceManager
 import com.flxrs.dankchat.BuildConfig
 import com.flxrs.dankchat.R
 import com.flxrs.dankchat.changelog.DankChatVersion
-import com.flxrs.dankchat.data.*
+import com.flxrs.dankchat.data.DisplayName
+import com.flxrs.dankchat.data.UserId
+import com.flxrs.dankchat.data.UserName
+import com.flxrs.dankchat.data.toDisplayName
+import com.flxrs.dankchat.data.toUserId
+import com.flxrs.dankchat.data.toUserName
+import com.flxrs.dankchat.data.toUserNames
 import com.flxrs.dankchat.data.twitch.badge.BadgeType
 import com.flxrs.dankchat.data.twitch.emote.ThirdPartyEmoteType
 import com.flxrs.dankchat.preferences.command.CommandDto
 import com.flxrs.dankchat.preferences.command.CommandDto.Companion.toEntryItem
 import com.flxrs.dankchat.preferences.command.CommandItem
+import com.flxrs.dankchat.preferences.model.ChannelWithRename
+import com.flxrs.dankchat.preferences.model.LiveUpdatesBackgroundBehavior
+import com.flxrs.dankchat.preferences.model.Preference
 import com.flxrs.dankchat.preferences.multientry.MultiEntryDto
 import com.flxrs.dankchat.preferences.upload.ImageUploader
 import com.flxrs.dankchat.utils.extensions.decodeOrNull
@@ -26,6 +35,8 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 
 @Singleton
 class DankChatPreferenceStore @Inject constructor(
@@ -46,6 +57,10 @@ class DankChatPreferenceStore @Inject constructor(
     var oAuthKey: String?
         get() = dankChatPreferences.getString(OAUTH_KEY, null)
         set(value) = dankChatPreferences.edit { putString(OAUTH_KEY, value) }
+
+    var clientId: String
+        get() = dankChatPreferences.getString(CLIENT_ID_KEY, null) ?: DEFAULT_CLIENT_ID
+        set(value) = dankChatPreferences.edit { putString(CLIENT_ID_KEY, value) }
 
     var channels: List<UserName>
         get() = dankChatPreferences.getString(CHANNELS_AS_STRING_KEY, null)?.split(',').orEmpty().toUserNames()
@@ -221,6 +236,37 @@ class DankChatPreferenceStore @Inject constructor(
     val createWhisperNotifications: Boolean
         get() = defaultPreferences.getBoolean(context.getString(R.string.preference_notification_whisper_key), true)
 
+    val bypassCommandHandling: Boolean
+        get() = defaultPreferences.getBoolean(context.getString(R.string.preference_bypass_command_handling_key), false)
+
+    val sevenTVEventApiEnabled: Boolean
+        get() = defaultPreferences.getBoolean(context.getString(R.string.preference_7tv_live_updates_key), true)
+
+    val sevenTVEventApiBackgroundBehavior: LiveUpdatesBackgroundBehavior
+        get() = when (defaultPreferences.getString(context.getString(R.string.preference_7tv_live_updates_timeout_key), null)) {
+            context.getString(R.string.preference_7tv_live_updates_entry_never_key)          -> LiveUpdatesBackgroundBehavior.Never
+            context.getString(R.string.preference_7tv_live_updates_entry_always_key)         -> LiveUpdatesBackgroundBehavior.Always
+            context.getString(R.string.preference_7tv_live_updates_entry_one_minute_key)     -> LiveUpdatesBackgroundBehavior.Timeout(1.minutes)
+            context.getString(R.string.preference_7tv_live_updates_entry_five_minutes_key)   -> LiveUpdatesBackgroundBehavior.Timeout(5.minutes)
+            context.getString(R.string.preference_7tv_live_updates_entry_thirty_minutes_key) -> LiveUpdatesBackgroundBehavior.Timeout(30.minutes)
+            context.getString(R.string.preference_7tv_live_updates_entry_one_hour_key)       -> LiveUpdatesBackgroundBehavior.Timeout(1.hours)
+            else                                                                             -> LiveUpdatesBackgroundBehavior.Timeout(5.minutes) // default
+        }
+
+    val sevenTVEventApiEnabledFlow: Flow<Boolean> = callbackFlow {
+        val prefKey = context.getString(R.string.preference_7tv_live_updates_key)
+        send(defaultPreferences.getBoolean(prefKey, true))
+
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == prefKey) {
+                trySend(defaultPreferences.getBoolean(prefKey, true))
+            }
+        }
+
+        defaultPreferences.registerOnSharedPreferenceChangeListener(listener)
+        awaitClose { defaultPreferences.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+
     val currentUserAndDisplayFlow: Flow<Pair<UserName?, DisplayName?>> = callbackFlow {
         send(userName to displayName)
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
@@ -298,6 +344,7 @@ class DankChatPreferenceStore @Inject constructor(
         putString(OAUTH_KEY, null)
         putString(NAME_KEY, null)
         putString(ID_STRING_KEY, null)
+        putString(CLIENT_ID_KEY, null)
     }
 
     fun clearBlacklist() = defaultPreferences.edit {
@@ -365,9 +412,10 @@ class DankChatPreferenceStore @Inject constructor(
             return false
         }
 
-        val current = DankChatVersion.CURRENT ?: return false
-        val lastViewed = lastViewedChangelogVersion?.let { DankChatVersion.fromString(it) } ?: return true
-        return lastViewed < current
+        val latestChangelog = DankChatVersion.LATEST_CHANGELOG?.version ?: return false
+        val lastViewed = lastViewedChangelogVersion?.let(DankChatVersion.Companion::fromString) ?: return true
+
+        return lastViewed < latestChangelog
     }
 
     fun setCurrentInstalledVersionCode() {
@@ -440,6 +488,7 @@ class DankChatPreferenceStore @Inject constructor(
     companion object {
         private const val LOGGED_IN_KEY = "loggedIn"
         private const val OAUTH_KEY = "oAuthKey"
+        private const val CLIENT_ID_KEY = "clientIdKey"
         private const val NAME_KEY = "nameKey"
         private const val DISPLAY_NAME_KEY = "displayNameKey"
         private const val RENAME_KEY = "renameKey"
@@ -466,6 +515,8 @@ class DankChatPreferenceStore @Inject constructor(
 
         private const val SCROLLBACK_LENGTH_STEP = 50
         fun correctScrollbackLength(seekbarValue: Int): Int = seekbarValue * SCROLLBACK_LENGTH_STEP
+
+        const val DEFAULT_CLIENT_ID = "xu7vd1i6tlr0ak45q1li2wdc0lrma8"
 
         val DEFAULT_UPLOADER = ImageUploader(
             uploadUrl = UPLOADER_URL_DEFAULT,

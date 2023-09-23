@@ -23,6 +23,7 @@ import com.flxrs.dankchat.data.repo.command.CommandResult
 import com.flxrs.dankchat.data.repo.data.DataLoadingFailure
 import com.flxrs.dankchat.data.repo.data.DataLoadingStep
 import com.flxrs.dankchat.data.repo.data.DataRepository
+import com.flxrs.dankchat.data.repo.data.DataUpdateEventMessage
 import com.flxrs.dankchat.data.repo.data.toMergedStrings
 import com.flxrs.dankchat.data.repo.emote.EmoteUsageRepository
 import com.flxrs.dankchat.data.repo.emote.Emotes
@@ -33,9 +34,15 @@ import com.flxrs.dankchat.data.twitch.command.TwitchCommand
 import com.flxrs.dankchat.data.twitch.emote.EmoteType
 import com.flxrs.dankchat.data.twitch.message.RoomState
 import com.flxrs.dankchat.data.twitch.message.SystemMessageType
+import com.flxrs.dankchat.data.twitch.message.SystemMessageType.ChannelBTTVEmotesFailed
+import com.flxrs.dankchat.data.twitch.message.SystemMessageType.ChannelFFZEmotesFailed
+import com.flxrs.dankchat.data.twitch.message.SystemMessageType.ChannelSevenTVEmoteAdded
+import com.flxrs.dankchat.data.twitch.message.SystemMessageType.ChannelSevenTVEmoteRemoved
+import com.flxrs.dankchat.data.twitch.message.SystemMessageType.ChannelSevenTVEmoteRenamed
+import com.flxrs.dankchat.data.twitch.message.SystemMessageType.ChannelSevenTVEmoteSetChanged
 import com.flxrs.dankchat.data.twitch.message.WhisperMessage
 import com.flxrs.dankchat.preferences.DankChatPreferenceStore
-import com.flxrs.dankchat.preferences.Preference
+import com.flxrs.dankchat.preferences.model.Preference
 import com.flxrs.dankchat.utils.DateTimeUtils
 import com.flxrs.dankchat.utils.extensions.firstValueOrNull
 import com.flxrs.dankchat.utils.extensions.flatMapLatestOrDefault
@@ -97,6 +104,7 @@ class MainViewModel @Inject constructor(
 ) : ViewModel() {
 
     private var fetchTimerJob: Job? = null
+    private var lastDataLoadingJob: Job? = null
 
     var started = false
 
@@ -209,6 +217,24 @@ class MainViewModel @Inject constructor(
                         val delay = chatRepository.userStateFlow.value.getSendDelay(activeChannel)
                         trySendMessageOrCommand(it.message, skipSuspendingCommands = true)
                         delay(delay)
+                    }
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            dataRepository.dataUpdateEvents.collect { updateEvent ->
+                when (updateEvent) {
+                    is DataUpdateEventMessage.ActiveEmoteSetChanged -> chatRepository.makeAndPostSystemMessage(
+                        type = ChannelSevenTVEmoteSetChanged(updateEvent.actorName, updateEvent.emoteSetName),
+                        channel = updateEvent.channel
+                    )
+
+                    is DataUpdateEventMessage.EmoteSetUpdated       -> {
+                        val (channel, event) = updateEvent
+                        event.added.forEach { chatRepository.makeAndPostSystemMessage(ChannelSevenTVEmoteAdded(event.actorName, it.name), channel) }
+                        event.updated.forEach { chatRepository.makeAndPostSystemMessage(ChannelSevenTVEmoteRenamed(event.actorName, it.oldName, it.name), channel) }
+                        event.removed.forEach { chatRepository.makeAndPostSystemMessage(ChannelSevenTVEmoteRemoved(event.actorName, it.name), channel) }
                     }
                 }
             }
@@ -332,7 +358,7 @@ class MainViewModel @Inject constructor(
                 async { EmoteMenuTabItem(EmoteMenuTab.GLOBAL, groupedByType[EmoteMenuTab.GLOBAL].toEmoteItems()) }
             ).awaitAll()
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(stopTimeout = 5.seconds), EmoteMenuTab.values().map { EmoteMenuTabItem(it, emptyList()) })
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(stopTimeout = 5.seconds), EmoteMenuTab.entries.map { EmoteMenuTabItem(it, emptyList()) })
 
     val isFullscreenFlow: StateFlow<Boolean> = _isFullscreen.asStateFlow()
     val areChipsExpanded: StateFlow<Boolean> = chipsExpanded.asStateFlow()
@@ -392,15 +418,21 @@ class MainViewModel @Inject constructor(
             return chatRepository.getRoomState(channel).firstValueOrNull
         }
 
+    fun cancelDataLoad() {
+        lastDataLoadingJob?.cancel()
+        viewModelScope.launch {
+            clearDataLoadingStates(DataLoadingState.None)
+        }
+    }
+
     fun loadData(channelList: List<UserName> = channels.value.orEmpty()) {
         val isLoggedIn = dankChatPreferenceStore.isLoggedIn
         val scrollBackLength = dankChatPreferenceStore.scrollbackLength
         chatRepository.scrollBackLength = scrollBackLength
 
-        viewModelScope.launch {
-            val loadingState = DataLoadingState.Loading
-            dataLoadingStateChannel.send(loadingState)
-            isDataLoading.update { true }
+        lastDataLoadingJob?.cancel()
+        lastDataLoadingJob = viewModelScope.launch {
+            clearDataLoadingStates(DataLoadingState.Loading)
 
             dataRepository.createFlowsIfNecessary(channels = channelList + WhisperMessage.WHISPER_CHANNEL)
 
@@ -447,37 +479,39 @@ class MainViewModel @Inject constructor(
         }
     }
 
-    fun retryDataLoading(dataLoadingFailures: Set<DataLoadingFailure>, chatLoadingFailures: Set<ChatLoadingFailure>) = viewModelScope.launch {
-        dataLoadingStateChannel.send(DataLoadingState.Loading)
-        isDataLoading.update { true }
-        dataLoadingFailures.map {
-            async {
-                Log.d(TAG, "Retrying data loading step: $it")
-                when (it.step) {
-                    is DataLoadingStep.GlobalSevenTVEmotes  -> dataRepository.loadGlobalSevenTVEmotes()
-                    is DataLoadingStep.GlobalBTTVEmotes     -> dataRepository.loadGlobalBTTVEmotes()
-                    is DataLoadingStep.GlobalFFZEmotes      -> dataRepository.loadGlobalFFZEmotes()
-                    is DataLoadingStep.GlobalBadges         -> dataRepository.loadGlobalBadges()
-                    is DataLoadingStep.DankChatBadges       -> dataRepository.loadDankChatBadges()
-                    is DataLoadingStep.ChannelBadges        -> dataRepository.loadChannelBadges(it.step.channel, it.step.channelId)
-                    is DataLoadingStep.ChannelSevenTVEmotes -> dataRepository.loadChannelSevenTVEmotes(it.step.channel, it.step.channelId)
-                    is DataLoadingStep.ChannelFFZEmotes     -> dataRepository.loadChannelFFZEmotes(it.step.channel, it.step.channelId)
-                    is DataLoadingStep.ChannelBTTVEmotes    -> dataRepository.loadChannelBTTVEmotes(it.step.channel, it.step.channelDisplayName, it.step.channelId)
+    fun retryDataLoading(dataLoadingFailures: Set<DataLoadingFailure>, chatLoadingFailures: Set<ChatLoadingFailure>) {
+        lastDataLoadingJob?.cancel()
+        lastDataLoadingJob = viewModelScope.launch {
+            clearDataLoadingStates(DataLoadingState.Loading)
+            dataLoadingFailures.map {
+                async {
+                    Log.d(TAG, "Retrying data loading step: $it")
+                    when (it.step) {
+                        is DataLoadingStep.GlobalSevenTVEmotes  -> dataRepository.loadGlobalSevenTVEmotes()
+                        is DataLoadingStep.GlobalBTTVEmotes     -> dataRepository.loadGlobalBTTVEmotes()
+                        is DataLoadingStep.GlobalFFZEmotes      -> dataRepository.loadGlobalFFZEmotes()
+                        is DataLoadingStep.GlobalBadges         -> dataRepository.loadGlobalBadges()
+                        is DataLoadingStep.DankChatBadges       -> dataRepository.loadDankChatBadges()
+                        is DataLoadingStep.ChannelBadges        -> dataRepository.loadChannelBadges(it.step.channel, it.step.channelId)
+                        is DataLoadingStep.ChannelSevenTVEmotes -> dataRepository.loadChannelSevenTVEmotes(it.step.channel, it.step.channelId)
+                        is DataLoadingStep.ChannelFFZEmotes     -> dataRepository.loadChannelFFZEmotes(it.step.channel, it.step.channelId)
+                        is DataLoadingStep.ChannelBTTVEmotes    -> dataRepository.loadChannelBTTVEmotes(it.step.channel, it.step.channelDisplayName, it.step.channelId)
+                    }
                 }
-            }
-        } + chatLoadingFailures.map {
-            async {
-                Log.d(TAG, "Retrying chat loading step: $it")
-                when (it.step) {
-                    is ChatLoadingStep.Chatters       -> chatRepository.loadChatters(it.step.channel)
-                    is ChatLoadingStep.RecentMessages -> chatRepository.loadRecentMessagesIfEnabled(it.step.channel)
+            } + chatLoadingFailures.map {
+                async {
+                    Log.d(TAG, "Retrying chat loading step: $it")
+                    when (it.step) {
+                        is ChatLoadingStep.Chatters       -> chatRepository.loadChatters(it.step.channel)
+                        is ChatLoadingStep.RecentMessages -> chatRepository.loadRecentMessagesIfEnabled(it.step.channel)
+                    }
                 }
-            }
-        }.awaitAll()
+            }.awaitAll()
 
-        chatRepository.reparseAllEmotesAndBadges()
+            chatRepository.reparseAllEmotesAndBadges()
 
-        checkFailuresAndEmitState()
+            checkFailuresAndEmitState()
+        }
     }
 
     fun getLastMessage() = chatRepository.getLastMessage()
@@ -543,7 +577,11 @@ class MainViewModel @Inject constructor(
     fun clear(channel: UserName) = chatRepository.clear(channel)
     fun clearMentionCount(channel: UserName) = chatRepository.clearMentionCount(channel)
     fun clearUnreadMessage(channel: UserName) = chatRepository.clearUnreadMessage(channel)
-    fun reconnect() = chatRepository.reconnect()
+    fun reconnect() {
+        chatRepository.reconnect()
+        dataRepository.reconnect()
+    }
+
     fun joinChannel(channel: UserName): List<UserName> = chatRepository.joinChannel(channel)
     fun trySendMessageOrCommand(message: String, skipSuspendingCommands: Boolean = false) = viewModelScope.launch {
         val channel = currentSuggestionChannel.value ?: return@launch
@@ -594,7 +632,10 @@ class MainViewModel @Inject constructor(
         RepeatedSendData(enabled, message)
     }
 
-    fun updateChannels(channels: List<UserName>) = chatRepository.updateChannels(channels)
+    fun updateChannels(channels: List<UserName>) {
+        val removed = chatRepository.updateChannels(channels)
+        dataRepository.removeChannels(removed)
+    }
 
     fun closeAndReconnect() {
         chatRepository.closeAndReconnect()
@@ -764,8 +805,8 @@ class MainViewModel @Inject constructor(
             val status = (it.failure as? ApiException)?.status?.value?.toString() ?: "0"
             when (it.step) {
                 is DataLoadingStep.ChannelSevenTVEmotes -> chatRepository.makeAndPostSystemMessage(SystemMessageType.ChannelSevenTVEmotesFailed(status), it.step.channel)
-                is DataLoadingStep.ChannelBTTVEmotes    -> chatRepository.makeAndPostSystemMessage(SystemMessageType.ChannelBTTVEmotesFailed(status), it.step.channel)
-                is DataLoadingStep.ChannelFFZEmotes     -> chatRepository.makeAndPostSystemMessage(SystemMessageType.ChannelFFZEmotesFailed(status), it.step.channel)
+                is DataLoadingStep.ChannelBTTVEmotes    -> chatRepository.makeAndPostSystemMessage(ChannelBTTVEmotesFailed(status), it.step.channel)
+                is DataLoadingStep.ChannelFFZEmotes     -> chatRepository.makeAndPostSystemMessage(ChannelFFZEmotesFailed(status), it.step.channel)
                 else                                    -> Unit
             }
         }
@@ -808,10 +849,14 @@ class MainViewModel @Inject constructor(
             }
         }
 
+        clearDataLoadingStates(state)
+    }
+
+    private suspend fun clearDataLoadingStates(state: DataLoadingState) {
         chatRepository.clearChatLoadingFailures()
         dataRepository.clearDataLoadingFailures()
         dataLoadingStateChannel.send(state)
-        isDataLoading.update { false }
+        isDataLoading.update { state is DataLoadingState.Loading }
     }
 
     private fun Throwable.toErrorMessage(): String {
@@ -855,8 +900,8 @@ class MainViewModel @Inject constructor(
 
     companion object {
         private val TAG = MainViewModel::class.java.simpleName
-        private const val STREAM_REFRESH_RATE = 30_000L
-        private const val IRC_TIMEOUT_DELAY = 5_000L
-        private const val IRC_TIMEOUT_SHORT_DELAY = 1_000L
+        private val STREAM_REFRESH_RATE = 30.seconds
+        private val IRC_TIMEOUT_DELAY = 5.seconds
+        private val IRC_TIMEOUT_SHORT_DELAY = 1.seconds
     }
 }

@@ -17,14 +17,14 @@ plugins {
 
 android {
     namespace = "com.flxrs.dankchat"
-    compileSdk = 33
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.flxrs.dankchat"
         minSdk = 21
-        targetSdk = 33
-        versionCode = 30627
-        versionName = "3.6.27"
+        targetSdk = 34
+        versionCode = 30801
+        versionName = "3.8.1"
 
         ksp {
             arg("room.schemaLocation", "$projectDir/schemas")
@@ -47,6 +47,7 @@ android {
     }
     buildFeatures {
         dataBinding = true
+        buildConfig = true
     }
 
     packaging {
@@ -116,6 +117,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.kotlinx.datetime)
 
 // AndroidX
     implementation(libs.androidx.core.ktx)
@@ -168,6 +170,6 @@ dependencies {
     testImplementation(libs.kotlin.test)
 
 // JSON parser
-    implementation("com.squareup.moshi:moshi:1.14.0")
-    kapt("com.squareup.moshi:moshi-kotlin-codegen:1.14.0")
+    implementation(libs.moshi)
+    ksp(libs.moshi.kotlin.codegen)
 }

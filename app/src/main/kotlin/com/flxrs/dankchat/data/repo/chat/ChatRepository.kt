@@ -487,7 +487,7 @@ class ChatRepository @Inject constructor(
         }
     }
 
-    fun updateChannels(updatedChannels: List<UserName>) {
+    fun updateChannels(updatedChannels: List<UserName>): List<UserName> {
         val currentChannels = channels.value.orEmpty()
         val removedChannels = currentChannels - updatedChannels.toSet()
 
@@ -496,6 +496,7 @@ class ChatRepository @Inject constructor(
         }
 
         _channels.value = updatedChannels
+        return removedChannels
     }
 
     fun appendLastMessage(channel: UserName, message: String) {

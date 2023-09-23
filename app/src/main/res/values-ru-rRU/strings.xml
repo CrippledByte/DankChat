@@ -34,7 +34,7 @@
     <string name="uploading_image">Загружается файл</string>
     <string name="settings">Настройки</string>
     <string name="external_upload_disclaimer">Сторонний хостинг %1$s предоставлен, используйте на свой страх и риск.</string>
-    <string name="nuuls_upload_title">Загрузка собственного изображения</string>
+    <string name="nuuls_upload_title">Пользовательский загрузчик медиа</string>
     <string name="snackbar_message_copied">Сообщение скопировано</string>
     <string name="snackbar_message_id_copied">ID сообщения скопирован</string>
     <string name="snackbar_error_copied">Информация об ошибке скопирована</string>
@@ -163,6 +163,18 @@
     <string name="recent_uploads_clear">Очистить загрузки</string>
     <string name="host">Хост</string>
     <string name="reset">Перезагрузить</string>
+    <string name="oauth_token">Токен OAuth</string>
+    <string name="verify_login">Проверить &amp; Сохранить</string>
+    <string name="custom_login_hint">Поддерживаются только идентификаторы клиентов, которые работают с Twitch\'s Helix API</string>
+    <string name="custom_login_show_scopes">Показать требуемые области</string>
+    <string name="custom_login_required_scopes">Требуемые области</string>
+    <string name="custom_login_missing_scopes_title">Пропущенные области</string>
+    <string name="custom_login_missing_scopes_text">Некоторые области, требуемые DankChat, отсутствуют в токене, и некоторые функции могут работать не так, как ожидалось. Вы хотите продолжить использование этого токена?\nПропущено: %1$s</string>
+    <string name="custom_login_missing_scopes_continue">Продолжить</string>
+    <string name="custom_login_error_missing_scopes">Пропущенные области: %1$s</string>
+    <string name="custom_login_error_fallback">Ошибка: %1$s</string>
+    <string name="custom_login_error_empty_token">Токен не может быть пустым</string>
+    <string name="custom_login_error_invalid_token">Неверный токен</string>
     <string name="badge_tooltip_moderator">Модератор</string>
     <string name="badge_tooltip_predictions">Прогноз \"%1$s\"</string>
     <string name="badge_tooltip_sub_tier">Уровень %1$s</string>
@@ -265,6 +277,9 @@
     <string name="preference_retain_webview_summary">Включить экспериментальное предотвращение перезагрузки трансляции после изменения ориентации или повторного открытия DankChat.</string>
     <string name="preference_show_changelogs">Отображать список изменений после обновления</string>
     <string name="preference_whats_new_header">Список изменений</string>
+    <string name="preference_custom_login_title">Пользовательский логин</string>
+    <string name="preference_bypass_command_handling_title">Обход обработки команд Twitch</string>
+    <string name="preference_bypass_command_handling_summary">Отключает перехват команд Twitch и отправляет их в чат</string>
     <string name="reset_media_uploader_dialog_title">Сбросить настройки загрузчика медиа</string>
     <string name="reset_media_uploader_dialog_message">Вы уверены, что хотите сбросить настройки загрузчика медиа по умолчанию?</string>
     <string name="reset_media_uploader_dialog_positive">Сбросить</string>
@@ -348,6 +363,7 @@
     <string name="changelog_sheet_title">DankChat был обновлён!</string>
     <string name="changelog_sheet_subtitle">Что нового в v%1$s:</string>
     <string name="changelog_3_6">Первоначальная поддержка ответов и просмотра цепочек ответов\nДобавлена ​​настройка для загрузки пропущенных сообщений после повторного подключения\nНовый модальный дизайн всплывающей информационной панели\nДобавлена новая всплывающая информационная панель сообщения при длительном нажатии на сообщение\nДобавлена новая информационная панель смайлов при нажатии на смайл\nДобавлена новая информационная панель журнала изменений\nДобавлена ​​поддержка анимированных смайлов FFZ\nУлучшен макет меню смайлов\nМиграция на новую конечную точку подписчиков, которая теперь доступна только владельцам и модераторам из-за ограничений Twitch</string>
+    <string name="changelog_3_7_3">Добавлена команда /shoutout\nДобавлены команды /shield и /shieldoff\nИсправлены ошибки загрузки данных по истечении срока действия входа в систему\nДобавлена настройка разработчика для установки пользовательского токена доступа\nДобавлена настройка разработчика для обхода обработки команд Twitch\nМножество обновлений перевода и обслуживания!</string>
     <string name="confirm_login_cancel_title">Подтвердить отмену входа</string>
     <string name="confirm_login_cancel_message">Вы уверены, что хотите отменить процесс входа?</string>
     <string name="confirm_login_cancel_positive_button">Отменить вход</string>

@@ -46,7 +46,7 @@ class CommandRepository @Inject constructor(
     private val customCommands = preferenceStore.commandsAsFlow.stateIn(scope, SharingStarted.Eagerly, emptyList())
     private val supibotCommands = mutableMapOf<UserName, MutableStateFlow<List<String>>>()
 
-    private val defaultCommands = Command.values()
+    private val defaultCommands = Command.entries
     private val defaultCommandTriggers = defaultCommands.map { it.trigger }
 
     private val commandTriggers = customCommands.map { customCommands ->
@@ -76,7 +76,9 @@ class CommandRepository @Inject constructor(
 
         val twitchCommand = twitchCommandRepository.findTwitchCommand(trigger)
         if (twitchCommand != null) {
-            if (skipSuspendingCommands) {
+            if (preferenceStore.bypassCommandHandling) {
+                return CommandResult.IrcCommand
+            } else if (skipSuspendingCommands) {
                 return CommandResult.Blocked
             }
 
@@ -91,11 +93,11 @@ class CommandRepository @Inject constructor(
             }
 
             return when (defaultCommand) {
-                Command.Block    -> blockUserCommand(args)
-                Command.Unblock  -> unblockUserCommand(args)
+                Command.Block   -> blockUserCommand(args)
+                Command.Unblock -> unblockUserCommand(args)
                 //Command.Chatters -> chattersCommand(channel)
-                Command.Uptime   -> uptimeCommand(channel)
-                Command.Help     -> helpCommand(roomState, userState)
+                Command.Uptime  -> uptimeCommand(channel)
+                Command.Help    -> helpCommand(roomState, userState)
             }
         }
 
