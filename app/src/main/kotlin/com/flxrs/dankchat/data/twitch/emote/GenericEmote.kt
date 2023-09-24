@@ -8,6 +8,9 @@ data class GenericEmote(
     val scale: Int,
     val emoteType: EmoteType,
     val isOverlayEmote: Boolean = false,
+    val codeWithoutColons: String = "", // if emoji, code will be set to ':emoji:', this will remain 'emoji'
+    val unified: String = "", // emoji codepoint
+    val isEmoji: Boolean = false,
 ) : Comparable<GenericEmote> {
     override fun toString(): String {
         return code

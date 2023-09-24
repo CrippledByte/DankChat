@@ -46,6 +46,10 @@ sealed interface EmoteType : Comparable<EmoteType> {
         override val title = "SevenTV"
     }
 
+    data object EmojiEmote : EmoteType {
+        override val title = ""
+    }
+
     data object RecentUsageEmote : EmoteType {
         override val title = ""
     }

@@ -14,6 +14,7 @@ import com.flxrs.dankchat.data.api.bttv.dto.BTTVGlobalEmoteDto
 import com.flxrs.dankchat.data.api.dankchat.DankChatApiClient
 import com.flxrs.dankchat.data.api.dankchat.dto.DankChatBadgeDto
 import com.flxrs.dankchat.data.api.dankchat.dto.DankChatEmoteDto
+import com.flxrs.dankchat.data.api.emojis.dto.EmojisEmoteDto
 import com.flxrs.dankchat.data.api.ffz.dto.FFZChannelDto
 import com.flxrs.dankchat.data.api.ffz.dto.FFZEmoteDto
 import com.flxrs.dankchat.data.api.ffz.dto.FFZGlobalDto
@@ -414,6 +415,15 @@ class EmoteRepository @Inject constructor(
         }
     }
 
+    suspend fun setEmojiEmotes(emojisResult: List<EmojisEmoteDto>) = withContext(Dispatchers.Default) {
+        val emojiEmotes = emojisResult.map { parseEmojiEmote(it) }
+        emotes.values.forEach { flow ->
+            flow.update {
+                it.copy(emojiEmotes = emojiEmotes)
+            }
+        }
+    }
+
     private val UserName?.twitchEmoteType: EmoteType
         get() = when {
             this == null || isGlobalTwitchChannel -> EmoteType.GlobalTwitchEmote
@@ -627,6 +637,24 @@ class EmoteRepository @Inject constructor(
         )
     }
 
+    private fun parseEmojiEmote(emote: EmojisEmoteDto): GenericEmote {
+        val url = EMOJI_EMOTE_TEMPLATE.format(EMOJI_EMOTE_SIZE, emote.image)
+        val lowResUrl = EMOJI_EMOTE_TEMPLATE.format(EMOJI_LOW_RES_EMOTE_SIZE, emote.image)
+
+        return GenericEmote(
+            code = ":${emote.shortName}:",
+            url = url,
+            lowResUrl = lowResUrl,
+            id = emote.shortName,
+            scale = 1,
+            emoteType = EmoteType.EmojiEmote,
+            isOverlayEmote = false,
+            codeWithoutColons = emote.shortName,
+            unified = emote.unified,
+            isEmoji = true
+        )
+    }
+
     private fun SevenTVEmoteFileDto.emoteUrlWithFallback(base: String, size: String, animated: Boolean): String {
         return when {
             animated && !SUPPORTS_WEBP -> "$base$size.gif"
@@ -659,6 +687,11 @@ class EmoteRepository @Inject constructor(
         private const val BTTV_EMOTE_TEMPLATE = "https://cdn.betterttv.net/emote/%s/%s"
         private const val BTTV_EMOTE_SIZE = "3x"
         private const val BTTV_LOW_RES_EMOTE_SIZE = "2x"
+
+        private const val EMOJI_EMOTE_TEMPLATE = "https://projects.iamcal.com/emoji-data/img-google-%s/%s"
+        private const val EMOJI_EMOTE_SIZE = "136"
+        private const val EMOJI_LOW_RES_EMOTE_SIZE = "64"
+
 
         private val WHITESPACE_REGEX = "\\s".toRegex()
         private val EMOTE_REPLACEMENTS = mapOf(

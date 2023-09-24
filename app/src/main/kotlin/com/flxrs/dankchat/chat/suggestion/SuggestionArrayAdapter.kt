@@ -49,6 +49,11 @@ class SuggestionsArrayAdapter(
                 is Suggestion.EmoteSuggestion   -> imageView.loadImage(suggestion.emote.url) {
                     scale(Scale.FIT)
                     size(textView.lineHeight * 2)
+
+                    // Show emoji code without leading and trailing colons (:emoji:)
+                    if (suggestion.emote.isEmoji) {
+                        textView.text = suggestion.emote.codeWithoutColons
+                    }
                 }
 
                 is Suggestion.UserSuggestion    -> {

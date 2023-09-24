@@ -8,6 +8,7 @@ import com.flxrs.dankchat.data.api.badges.BadgesApi
 import com.flxrs.dankchat.data.api.bttv.BTTVApi
 import com.flxrs.dankchat.data.api.chatters.ChattersApi
 import com.flxrs.dankchat.data.api.dankchat.DankChatApi
+import com.flxrs.dankchat.data.api.emojis.EmojisApi
 import com.flxrs.dankchat.data.api.ffz.FFZApi
 import com.flxrs.dankchat.data.api.helix.HelixApi
 import com.flxrs.dankchat.data.api.ivr.IvrApi
@@ -45,6 +46,7 @@ object NetworkModule {
     private const val FFZ_BASE_URL = "https://api.frankerfacez.com/v1/"
     private const val BTTV_BASE_URL = "https://api.betterttv.net/3/cached/"
     private const val SEVENTV_BASE_URL = "https://7tv.io/v3/"
+    private const val EMOJIS_BASE_URL = "https://projects.iamcal.com/"
     private const val IVR_BASE_URL = "https://api.ivr.fi/"
 
     @WebSocketOkHttpClient
@@ -173,6 +175,14 @@ object NetworkModule {
     fun provideSevenTVApi(ktorClient: HttpClient) = SevenTVApi(ktorClient.config {
         defaultRequest {
             url(SEVENTV_BASE_URL)
+        }
+    })
+
+    @Singleton
+    @Provides
+    fun provideEmojisApi(ktorClient: HttpClient) = EmojisApi(ktorClient.config {
+        defaultRequest {
+            url(EMOJIS_BASE_URL)
         }
     })
 

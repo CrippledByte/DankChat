@@ -68,6 +68,8 @@ import com.flxrs.dankchat.data.state.DataLoadingState
 import com.flxrs.dankchat.data.state.ImageUploadState
 import com.flxrs.dankchat.data.twitch.badge.Badge
 import com.flxrs.dankchat.data.twitch.emote.ChatMessageEmote
+import com.flxrs.dankchat.data.twitch.emote.EmoteType
+import com.flxrs.dankchat.data.twitch.emote.GenericEmote
 import com.flxrs.dankchat.databinding.EditDialogBinding
 import com.flxrs.dankchat.databinding.MainFragmentBinding
 import com.flxrs.dankchat.preferences.model.ChannelWithRename
@@ -661,9 +663,26 @@ class MainFragment : Fragment() {
         fullscreenBottomSheetBehavior?.expand()
     }
 
+    private fun String.toEmoji(): String {
+        return this.split("-")
+            .map { it.toInt(16) }
+            .map { Character.toChars(it) }
+            .joinToString(separator = "") { String(it) }
+    }
+
     fun insertEmote(code: String, id: String) {
         insertText("$code ")
         mainViewModel.addEmoteUsage(id)
+    }
+
+    fun insertEmote(emote: GenericEmote) {
+        var code = emote.code
+        if (emote.isEmoji) {
+            code = emote.unified.toEmoji()
+        }
+
+        insertText("$code ")
+        mainViewModel.addEmoteUsage(emote.id)
     }
 
     private fun openChangelogSheetIfNecessary() {
@@ -1379,6 +1398,13 @@ class MainFragment : Fragment() {
             val suggestion = parent.getItemAtPosition(position)
             if (suggestion is Suggestion.EmoteSuggestion) {
                 mainViewModel.addEmoteUsage(suggestion.emote.id)
+
+                if (suggestion.emote.isEmoji) {
+                    val emoji = suggestion.emote.unified.toEmoji()
+                    val text = "$emoji "
+                    setText(text)
+                    setSelection(text.length) // move cursor to end
+                }
             }
         }
 

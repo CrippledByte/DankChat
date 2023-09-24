@@ -22,7 +22,7 @@ class EmoteMenuFragment : Fragment() {
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         val adapter = EmoteMenuAdapter {
-            (parentFragment as? MainFragment)?.insertEmote(it.code, it.id)
+            (parentFragment as? MainFragment)?.insertEmote(it)
         }
         bindingRef = EmoteMenuFragmentBinding.inflate(inflater, container, false).apply {
             bottomSheetViewPager.adapter = adapter
@@ -37,6 +37,7 @@ class EmoteMenuFragment : Fragment() {
                     EmoteMenuTab.CHANNEL -> root.context.getString(R.string.emote_menu_tab_channel)
                     EmoteMenuTab.GLOBAL  -> root.context.getString(R.string.emote_menu_tab_global)
                     EmoteMenuTab.RECENT  -> root.context.getString(R.string.emote_menu_tab_recent)
+                    EmoteMenuTab.EMOJIS  -> "Emojis"
                 }
             }.attach()
         }

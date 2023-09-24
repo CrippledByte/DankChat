@@ -348,6 +348,8 @@ class MainViewModel @Inject constructor(
                     is EmoteType.ChannelBTTVEmote,
                     is EmoteType.ChannelSevenTVEmote        -> EmoteMenuTab.CHANNEL
 
+                    is EmoteType.EmojiEmote                 -> EmoteMenuTab.EMOJIS
+
                     else                                    -> EmoteMenuTab.GLOBAL
                 }
             }
@@ -355,7 +357,8 @@ class MainViewModel @Inject constructor(
                 async { EmoteMenuTabItem(EmoteMenuTab.RECENT, availableRecents.toEmoteItems()) },
                 async { EmoteMenuTabItem(EmoteMenuTab.SUBS, groupedByType[EmoteMenuTab.SUBS]?.moveToFront(activeChannel.value).toEmoteItems()) },
                 async { EmoteMenuTabItem(EmoteMenuTab.CHANNEL, groupedByType[EmoteMenuTab.CHANNEL].toEmoteItems()) },
-                async { EmoteMenuTabItem(EmoteMenuTab.GLOBAL, groupedByType[EmoteMenuTab.GLOBAL].toEmoteItems()) }
+                async { EmoteMenuTabItem(EmoteMenuTab.GLOBAL, groupedByType[EmoteMenuTab.GLOBAL].toEmoteItems()) },
+                async { EmoteMenuTabItem(EmoteMenuTab.EMOJIS, groupedByType[EmoteMenuTab.EMOJIS].toEmoteItems()) }
             ).awaitAll()
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(stopTimeout = 5.seconds), EmoteMenuTab.entries.map { EmoteMenuTabItem(it, emptyList()) })
@@ -445,6 +448,7 @@ class MainViewModel @Inject constructor(
                 async { dataRepository.loadGlobalBTTVEmotes() },
                 async { dataRepository.loadGlobalFFZEmotes() },
                 async { dataRepository.loadGlobalSevenTVEmotes() },
+                async { dataRepository.loadEmojiEmotes() },
                 *channels.flatMap { (channelId, channel, channelDisplayName) ->
                     chatRepository.createFlowsIfNecessary(channel)
                     listOf(
@@ -487,6 +491,7 @@ class MainViewModel @Inject constructor(
                 async {
                     Log.d(TAG, "Retrying data loading step: $it")
                     when (it.step) {
+                        is DataLoadingStep.EmojiEmotes  -> dataRepository.loadEmojiEmotes()
                         is DataLoadingStep.GlobalSevenTVEmotes  -> dataRepository.loadGlobalSevenTVEmotes()
                         is DataLoadingStep.GlobalBTTVEmotes     -> dataRepository.loadGlobalBTTVEmotes()
                         is DataLoadingStep.GlobalFFZEmotes      -> dataRepository.loadGlobalFFZEmotes()
@@ -660,6 +665,7 @@ class MainViewModel @Inject constructor(
             this += launch { dataRepository.loadGlobalBTTVEmotes() }
             this += launch { dataRepository.loadGlobalFFZEmotes() }
             this += launch { dataRepository.loadGlobalSevenTVEmotes() }
+            this += launch { dataRepository.loadEmojiEmotes() }
             if (channel != null) {
                 this += launch { dataRepository.loadChannelBadges(channelName, channel.id) }
                 this += launch { dataRepository.loadChannelBTTVEmotes(channelName, channel.displayName, channel.id) }

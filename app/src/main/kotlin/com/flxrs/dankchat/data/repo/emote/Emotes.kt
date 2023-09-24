@@ -1,5 +1,6 @@
 package com.flxrs.dankchat.data.repo.emote
 
+import com.flxrs.dankchat.data.twitch.emote.EmoteType
 import com.flxrs.dankchat.data.twitch.emote.GenericEmote
 
 data class Emotes(
@@ -10,6 +11,7 @@ data class Emotes(
     val bttvGlobalEmotes: List<GenericEmote> = emptyList(),
     val sevenTvChannelEmotes: List<GenericEmote> = emptyList(),
     val sevenTvGlobalEmotes: List<GenericEmote> = emptyList(),
+    val emojiEmotes: List<GenericEmote> = emptyList(),
 ) {
 
     val sorted: List<GenericEmote> = buildList {
@@ -22,6 +24,8 @@ data class Emotes(
         addAll(ffzGlobalEmotes)
         addAll(bttvGlobalEmotes)
         addAll(sevenTvGlobalEmotes)
+
+        addAll(emojiEmotes)
     }.sortedBy(GenericEmote::code)
 
     val suggestions: List<GenericEmote> = sorted.distinctBy(GenericEmote::code)

@@ -17,6 +17,8 @@ sealed interface DataLoadingStep {
 
     data object GlobalSevenTVEmotes : DataLoadingStep
 
+    data object EmojiEmotes : DataLoadingStep
+
     data class ChannelBadges(val channel: UserName, val channelId: UserId) : DataLoadingStep
     data class ChannelFFZEmotes(val channel: UserName, val channelId: UserId) : DataLoadingStep
     data class ChannelBTTVEmotes(val channel: UserName, val channelDisplayName: DisplayName, val channelId: UserId) : DataLoadingStep

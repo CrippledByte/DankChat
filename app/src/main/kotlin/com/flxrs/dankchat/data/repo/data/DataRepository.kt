@@ -7,6 +7,7 @@ import com.flxrs.dankchat.data.UserName
 import com.flxrs.dankchat.data.api.badges.BadgesApiClient
 import com.flxrs.dankchat.data.api.bttv.BTTVApiClient
 import com.flxrs.dankchat.data.api.dankchat.DankChatApiClient
+import com.flxrs.dankchat.data.api.emojis.EmojisApiClient
 import com.flxrs.dankchat.data.api.ffz.FFZApiClient
 import com.flxrs.dankchat.data.api.helix.HelixApiClient
 import com.flxrs.dankchat.data.api.helix.dto.StreamDto
@@ -52,6 +53,7 @@ class DataRepository @Inject constructor(
     private val bttvApiClient: BTTVApiClient,
     private val sevenTVApiClient: SevenTVApiClient,
     private val sevenTVEventApiClient: SevenTVEventApiClient,
+    private val emojisApiClient: EmojisApiClient,
     private val uploadClient: UploadClient,
     private val ivrApiClient: IvrApiClient,
     private val emoteRepository: EmoteRepository,
@@ -243,6 +245,14 @@ class DataRepository @Inject constructor(
                 .getOrEmitFailure { DataLoadingStep.GlobalSevenTVEmotes }
                 ?.let { emoteRepository.setSevenTVGlobalEmotes(it) }
         }.let { Log.i(TAG, "Loaded global 7TV emotes in $it ms") }
+    }
+
+    suspend fun loadEmojiEmotes() = withContext(Dispatchers.IO) {
+        measureTimeMillis {
+            emojisApiClient.getEmojiEmotes()
+                .getOrEmitFailure { DataLoadingStep.EmojiEmotes }
+                ?.let { emoteRepository.setEmojiEmotes(it) }
+        }.let { Log.i(TAG, "Loaded emoji emotes in $it ms") }
     }
 
     private fun <T> Result<T>.getOrEmitFailure(step: () -> DataLoadingStep): T? = getOrElse { throwable ->
