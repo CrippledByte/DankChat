@@ -107,8 +107,15 @@ class SuggestionsArrayAdapter(
     }
 
     private fun List<Suggestion.EmoteSuggestion>.filterEmotes(constraint: String): List<Suggestion.EmoteSuggestion> {
-        val exactSuggestions = filter { it.emote.code.contains(constraint) }
-        val caseInsensitiveSuggestions = (this - exactSuggestions.toSet()).filter {
+        // Only show emoji suggestions if user input starts with a colon
+        val list = if (!constraint.startsWith(":")) {
+            this.filterNot { it.emote.isEmoji }
+        } else {
+            this
+        }
+
+        val exactSuggestions = list.filter { it.emote.code.contains(constraint) }
+        val caseInsensitiveSuggestions = (list - exactSuggestions.toSet()).filter {
             it.emote.code.contains(constraint, ignoreCase = true)
         }
         return exactSuggestions + caseInsensitiveSuggestions
